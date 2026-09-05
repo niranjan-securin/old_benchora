@@ -1,0 +1,12 @@
+
+# Interactive mode — opens tmux with Claude CLI
+./benchora.sh /path/to/AEGIS_IQ
+
+# Full automated pipeline (score → compare → report)
+./benchora.sh /path/to/AEGIS_IQ --auto
+
+# Score all runs only
+./benchora.sh /path/to/AEGIS_IQ --score-only
+
+# Compare already-scored runs only
+./benchora.sh /path/to/AEGIS_IQ --compare-only

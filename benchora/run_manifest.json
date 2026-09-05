@@ -1,0 +1,139 @@
+{
+ "kimi-k3/run1_kimi": {
+  "model": "kimi-k3",
+  "run": "run1_kimi",
+  "artifacts": "kimik3\\run1_kimi\\medicare_kimik3_run1\\medicare1_kimi\\run-20260826-005512-0a986284",
+  "transcripts": "kimik3\\run1_kimi\\claude_kimik3_run1\\home\\secadmin\\.claude\\projects",
+  "bench": true,
+  "finding_md": 19,
+  "judge_verdict_path": "kimik3\\run1_kimi\\medicare_kimik3_run1\\medicare1_kimi\\run-20260826-005512-0a986284\\reporting\\2026-08-26T15_03_12Z-run-20260826-005512-0a986284-judge_verdict.json",
+  "judge_verdict": "FAIL",
+  "gates": {
+   "PASS": 8,
+   "FAIL": 0,
+   "TIMEOUT": 0
+  }
+ },
+ "kimi-k3/run2_kimi": {
+  "model": "kimi-k3",
+  "run": "run2_kimi",
+  "artifacts": "kimik3\\run2_kimi\\kimi_run2\\medicare2_kimi\\run-20260827-182932-0204cf4a",
+  "transcripts": "kimik3\\run2_kimi\\kimi_run_2_claude\\home\\securin\\.claude\\projects",
+  "bench": true,
+  "finding_md": 451,
+  "judge_verdict_path": "kimik3\\run2_kimi\\kimi_run2\\medicare2_kimi\\run-20260827-182932-0204cf4a\\reporting\\2026-08-28T10_11_53Z-run-20260827-182932-0204cf4a-judge_verdict.json",
+  "judge_verdict": "CONDITIONAL_PASS",
+  "gates": {
+   "PASS": 9,
+   "FAIL": 0,
+   "TIMEOUT": 1
+  }
+ },
+ "kimi-k3/run_3_kimi": {
+  "model": "kimi-k3",
+  "run": "run_3_kimi",
+  "artifacts": "kimik3\\run_3_kimi\\kimi_run3\\medicare3_kimi\\run-20260831-185233-86465881",
+  "transcripts": "kimik3\\run_3_kimi\\kimi_run_3_claude\\home\\securin\\.claude\\projects",
+  "bench": true,
+  "finding_md": 13,
+  "judge_verdict_path": "kimik3\\run_3_kimi\\kimi_run3\\medicare3_kimi\\run-20260831-185233-86465881\\reporting\\2026-09-01T05-00-00Z-run-20260831-185233-86465881-judge_verdict.json",
+  "judge_verdict": "CONDITIONAL_PASS",
+  "gates": {
+   "PASS": 8,
+   "FAIL": 1,
+   "TIMEOUT": 2
+  }
+ },
+ "sonnet-4-6/run1_sonnet": {
+  "model": "sonnet-4-6",
+  "run": "run1_sonnet",
+  "artifacts": "sonnet_4.6\\run1_sonnet\\medicare_sonnet_4-6_run1\\medicare1_sonnet4_6\\run-20260826-164615-9376d5f8",
+  "transcripts": "sonnet_4.6\\run1_sonnet\\claude_sonnect_4-6\\projects",
+  "bench": true,
+  "finding_md": 17,
+  "judge_verdict_path": "sonnet_4.6\\run1_sonnet\\medicare_sonnet_4-6_run1\\medicare1_sonnet4_6\\run-20260826-164615-9376d5f8\\reporting\\2026-08-27T05-05-19Z-run-20260826-164615-9376d5f8-judge_verdict.json",
+  "judge_verdict": "CONDITIONAL_PASS",
+  "gates": {
+   "PASS": 9,
+   "FAIL": 0,
+   "TIMEOUT": 1
+  }
+ },
+ "sonnet-4-6/run2_sonnet": {
+  "model": "sonnet-4-6",
+  "run": "run2_sonnet",
+  "artifacts": "sonnet_4.6\\run2_sonnet\\sonnet_4_6_run2\\medicare2_sonnet4_6\\run-20260827-182940-b9ab9158",
+  "transcripts": "sonnet_4.6\\run3_sonnet\\sonnet_run3_claude\\home\\securin\\.claude\\projects",
+  "bench": true,
+  "finding_md": 14,
+  "judge_verdict_path": "sonnet_4.6\\run2_sonnet\\sonnet_4_6_run2\\medicare2_sonnet4_6\\run-20260827-182940-b9ab9158\\reporting\\2026-08-28T06_26_00Z-run-20260827-182940-b9ab9158-judge_verdict.json",
+  "judge_verdict": "FAIL",
+  "gates": {
+   "PASS": 10,
+   "FAIL": 1,
+   "TIMEOUT": 0
+  },
+  "transcripts_note": "source dirs were swapped; corrected by run-id majority vote"
+ },
+ "sonnet-4-6/run3_sonnet": {
+  "model": "sonnet-4-6",
+  "run": "run3_sonnet",
+  "artifacts": "sonnet_4.6\\run3_sonnet\\sonnet_4_6_run3\\medicare3_sonnet4_6\\run-20260831-185236-1d586a7d",
+  "transcripts": "sonnet_4.6\\run2_sonnet\\sonnet_run2_claude\\home\\securin\\.claude\\projects",
+  "bench": true,
+  "finding_md": 26,
+  "judge_verdict_path": "sonnet_4.6\\run3_sonnet\\sonnet_4_6_run3\\medicare3_sonnet4_6\\run-20260831-185236-1d586a7d\\reporting\\20260901T073016Z-run-20260831-185236-1d586a7d-judge_verdict.json",
+  "judge_verdict": "FAIL",
+  "gates": {
+   "PASS": 11,
+   "FAIL": 0,
+   "TIMEOUT": 1
+  },
+  "transcripts_note": "source dirs were swapped; corrected by run-id majority vote"
+ },
+ "opus-4-6/run1": {
+  "model": "opus-4-6",
+  "run": "run1",
+  "artifacts": "opus_4-6\\run1\\medicare1_opus4_6\\run-20260826-164329-83ef780d",
+  "transcripts": "opus_4-6\\run1\\opus_4_6_claude_run1\\home\\secadmin\\.claude\\projects",
+  "bench": false,
+  "finding_md": 24,
+  "judge_verdict_path": "opus_4-6\\run1\\medicare1_opus4_6\\run-20260826-164329-83ef780d\\reporting\\2026-08-27T00-51-00Z-run-20260826-164329-83ef780d-judge_verdict.json",
+  "judge_verdict": "CONDITIONAL_PASS",
+  "gates": {
+   "PASS": 9,
+   "FAIL": 0,
+   "TIMEOUT": 0
+  }
+ },
+ "opus-4-6/run2": {
+  "model": "opus-4-6",
+  "run": "run2",
+  "artifacts": "opus_4-6\\run2\\medicare2_opus4_6\\run-20260827-182937-9005dee6",
+  "transcripts": "opus_4-6\\run2\\opus_4_6_claude_run2\\home\\securin\\.claude\\projects",
+  "bench": true,
+  "finding_md": 30,
+  "judge_verdict_path": null,
+  "judge_verdict": "(none)",
+  "gates": {
+   "PASS": 9,
+   "FAIL": 0,
+   "TIMEOUT": 0
+  }
+ },
+ "opus-4-6/run3": {
+  "model": "opus-4-6",
+  "run": "run3",
+  "artifacts": "opus_4-6\\run3\\medicare3_opus4_6\\run-20260831-185234-bfb7ba66",
+  "transcripts": "opus_4-6\\run3\\opus_4_6_claude_run3\\home\\securin\\.claude\\projects",
+  "bench": true,
+  "finding_md": 38,
+  "judge_verdict_path": "opus_4-6\\run3\\medicare3_opus4_6\\run-20260831-185234-bfb7ba66\\reporting\\2026-09-01T06-37-07Z-run-20260831-185234-bfb7ba66-judge_verdict.json",
+  "judge_verdict": "FAIL",
+  "gates": {
+   "PASS": 10,
+   "FAIL": 0,
+   "TIMEOUT": 0
+  }
+ }
+}

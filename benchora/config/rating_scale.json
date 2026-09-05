@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "ratings": [
+    {
+      "name": "Leading",
+      "color": "#22c55e",
+      "bg_color": "#dcfce7",
+      "condition": "Best score AND margin above second place exceeds second place's run-to-run stdev",
+      "min_threshold": null
+    },
+    {
+      "name": "Strong",
+      "color": "#3b82f6",
+      "bg_color": "#dbeafe",
+      "condition": "Within leader's run-to-run stdev",
+      "min_threshold": null
+    },
+    {
+      "name": "Adequate",
+      "color": "#f59e0b",
+      "bg_color": "#fef3c7",
+      "condition": "Score >= 60% of leader",
+      "min_threshold": 0.6
+    },
+    {
+      "name": "Weak",
+      "color": "#ef4444",
+      "bg_color": "#fee2e2",
+      "condition": "Score >= 30% of leader",
+      "min_threshold": 0.3
+    },
+    {
+      "name": "Not viable",
+      "color": "#6b7280",
+      "bg_color": "#f3f4f6",
+      "condition": "Score < 30% of leader OR structural failure",
+      "min_threshold": 0.0
+    }
+  ],
+  "structural_failure_override": true,
+  "structural_failure_conditions": [
+    "component_refusal: gate FAIL + >=3 model guardrail refusals in same component",
+    "schema_pass_rate < 0.5 for area's components",
+    "all components for area have gate FAIL"
+  ],
+  "overall_weights": {
+    "areas_1_to_8": 1.0,
+    "area_9_reliability": 1.5,
+    "area_10_cost": 0.5,
+    "area_11_reproducibility": 1.0
+  }
+}

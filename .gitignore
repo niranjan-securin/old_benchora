@@ -1,0 +1,19 @@
+# Only benchora/ and groundtruth_old/ are tracked
+/benchora.backup-*/
+/benchora_v2/
+/design_plan.md
+/implementation_plan.md
+
+# Run artifacts: keep the output/ folder, not its contents
+/benchora/output/*
+!/benchora/output/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Editor/OS noise
+*.bak
+*.bak2
+.DS_Store
+Thumbs.db

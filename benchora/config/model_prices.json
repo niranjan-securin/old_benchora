@@ -1,0 +1,132 @@
+{
+  "_comment": "Official Anthropic pricing (per million tokens). 5-min ephemeral cache TTL (LiteLLM/OpenRouter default). Source: platform.claude.com/docs/en/about-claude/pricing",
+  "_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "_fetched": "2026-08-25",
+  "_cache_ttl": "5-min ephemeral (cache_write = 1.25x base input, cache_read = 0.1x base input)",
+  "claude-sonnet-4-6": {
+    "_source": "Anthropic official",
+    "input_per_million": 3.0,
+    "output_per_million": 15.0,
+    "cache_write_per_million": 3.75,
+    "cache_read_per_million": 0.3
+  },
+  "claude-sonnet-5": {
+    "_source": "Anthropic official",
+    "input_per_million": 2.0,
+    "output_per_million": 10.0,
+    "cache_write_per_million": 4.0,
+    "cache_read_per_million": 0.2
+  },
+  "anthropic/claude-fable-5": {
+    "_source": "Anthropic official",
+    "input_per_million": 10.0,
+    "output_per_million": 50.0,
+    "cache_write_per_million": 20.0,
+    "cache_read_per_million": 1.0
+  },
+  "anthropic/claude-opus-5": {
+    "_source": "Anthropic official",
+    "input_per_million": 5.0,
+    "output_per_million": 25.0,
+    "cache_write_per_million": 10.0,
+    "cache_read_per_million": 0.5
+  },
+  "claude-opus-4-6": {
+    "_source": "Operator-supplied Opus 4.6 rate card",
+    "input_per_million": 5.0,
+    "output_per_million": 25.0,
+    "cache_write_per_million": 6.25,
+    "cache_read_per_million": 0.5,
+    "_batch_input_per_million": 2.5,
+    "_batch_output_per_million": 12.5,
+    "_cache_write_1h_per_million": 10.0,
+    "_long_context_input_per_million": 10.0,
+    "_long_context_output_per_million": 37.5,
+    "_long_context_threshold_tokens": 200000,
+    "_note": "benchora uses a flat cost model: the >200k long-context premium is NOT applied, so cost is a lower bound for runs with large prompts."
+  },
+  "anthropic/claude-opus-4-6": {
+    "_source": "Operator-supplied Opus 4.6 rate card",
+    "input_per_million": 5.0,
+    "output_per_million": 25.0,
+    "cache_write_per_million": 6.25,
+    "cache_read_per_million": 0.5,
+    "_batch_input_per_million": 2.5,
+    "_batch_output_per_million": 12.5,
+    "_cache_write_1h_per_million": 10.0,
+    "_long_context_input_per_million": 10.0,
+    "_long_context_output_per_million": 37.5,
+    "_long_context_threshold_tokens": 200000,
+    "_note": "benchora uses a flat cost model: the >200k long-context premium is NOT applied, so cost is a lower bound for runs with large prompts."
+  },
+  "claude-opus-4-7": {
+    "_source": "Anthropic official — same tier as Claude Opus 4",
+    "input_per_million": 15.0,
+    "output_per_million": 75.0,
+    "cache_write_per_million": 18.75,
+    "cache_read_per_million": 1.5
+  },
+  "anthropic/claude-opus-4-7": {
+    "_source": "Anthropic official — same tier as Claude Opus 4",
+    "input_per_million": 15.0,
+    "output_per_million": 75.0,
+    "cache_write_per_million": 18.75,
+    "cache_read_per_million": 1.5
+  },
+  "openai/gpt-5.6-sol": {
+    "_based_on": "OpenAI o3 @ $2/$8",
+    "input_per_million": 2.0,
+    "output_per_million": 8.0,
+    "cache_write_per_million": null,
+    "cache_read_per_million": 0.5
+  },
+  "x-ai/grok-4.6": {
+    "_based_on": "Grok 3 estimated tier",
+    "input_per_million": 3.0,
+    "output_per_million": 15.0,
+    "cache_write_per_million": null,
+    "cache_read_per_million": null
+  },
+  "qwen/qwen3.8-max": {
+    "_based_on": "Qwen3 235B @ $0.455/$1.82",
+    "input_per_million": 0.455,
+    "output_per_million": 1.82,
+    "cache_write_per_million": null,
+    "cache_read_per_million": null
+  },
+  "google/gemini-3.1-pro-preview": {
+    "_based_on": "Gemini 2.5 Pro @ $1.25/$10",
+    "input_per_million": 1.25,
+    "output_per_million": 10.0,
+    "cache_write_per_million": 0.375,
+    "cache_read_per_million": 0.125
+  },
+  "moonshotai/kimi-k3": {
+    "_based_on": "Kimi K3 @ $2.55/$12.75",
+    "input_per_million": 2.55,
+    "output_per_million": 12.75,
+    "cache_write_per_million": null,
+    "cache_read_per_million": null
+  },
+  "openrouter/moonshotai/kimi-k3": {
+    "_based_on": "Kimi K3 @ $2.55/$12.75 (OpenRouter variant)",
+    "input_per_million": 2.55,
+    "output_per_million": 12.75,
+    "cache_write_per_million": null,
+    "cache_read_per_million": null
+  },
+  "deepseek/deepseek-v4-pro-0813": {
+    "_based_on": "DeepSeek V3 @ $0.24/$0.90",
+    "input_per_million": 0.24,
+    "output_per_million": 0.9,
+    "cache_write_per_million": null,
+    "cache_read_per_million": 0.135
+  },
+  "z-ai/glm-5.3": {
+    "_based_on": "GLM-4 estimated tier",
+    "input_per_million": 0.5,
+    "output_per_million": 2.0,
+    "cache_write_per_million": null,
+    "cache_read_per_million": null
+  }
+}

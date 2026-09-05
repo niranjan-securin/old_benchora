@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(nmap *)",
+      "Bash(sqlmap *)",
+      "Bash(nuclei *)",
+      "Bash(ffuf *)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "mcp__playwright__*",
+      "WebFetch"
+    ],
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash(python3 *)",
+      "Bash(python *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(git *)",
+      "Bash(jq *)"
+    ]
+  },
+  "env": {
+    "BENCHORA_ROOT": ".",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  }
+}
