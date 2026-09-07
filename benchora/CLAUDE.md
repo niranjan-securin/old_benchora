@@ -52,7 +52,7 @@ AEGIS_IQ/
 ## Scoring methodology
 
 Two grading tracks:
-- **GT-based** (Areas 1, 4, 5): compare output to ground truth → TP/FP/FN/precision/recall
+- **GT-based** (Areas 1, 4, 5): compare output to ground truth → TP/Unmatched/FN/precision/recall
 - **Test-case** (Areas 2, 3, 6, 7, 8): user-provided minimum criteria → pass/fail rate
 - **Computed** (Areas 9, 10, 11): refusals, cost, reproducibility from metrics
 
@@ -63,7 +63,7 @@ Leading > Strong > Adequate > Weak > Not viable
 
 - `parse_transcript.py` — standalone token/cost extractor from .jsonl transcripts
 - `detect_refusals.py` — 8-type refusal scanner (guardrails + API blocks + hook blocks)
-- `compute_gt_accuracy.py` — TP/FP/FN against ground truth
+- `compute_gt_accuracy.py` — TP/Unmatched/FN against ground truth
 - `evaluate_test_cases.py` — test case assertion runner
 - `count_duplicates.py` — dedup stats from _grouped_from
 - `compute_area_scores.py` — 11 scoring formulas

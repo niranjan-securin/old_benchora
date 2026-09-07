@@ -33,7 +33,13 @@ def _read_jsonl(path: str) -> list[dict]:
 
 
 def parse_transcript(path: str) -> dict:
-    """Parse a single Claude Code .jsonl transcript."""
+    """Parse a single Claude Code .jsonl transcript.
+
+    Deduplicates assistant entries by message.id — Claude Code re-logs
+    the same response during context compaction, so the JSONL can contain
+    2-19 copies of the same API call.  For each message.id group we keep
+    the entry with the highest output_tokens (the final streaming result).
+    """
     entries = _read_jsonl(path)
 
     tokens = {
@@ -54,6 +60,10 @@ def parse_transcript(path: str) -> dict:
     first_ts = None
     last_ts = None
 
+    # Collect assistant entries keyed by message.id for dedup
+    _msg_best: dict[str, dict] = {}  # message_id -> best usage dict
+    _noid_usages: list[dict] = []
+
     for entry in entries:
         entry_type = entry.get("type", "")
         ts = entry.get("timestamp") or entry.get("ts")
@@ -64,12 +74,7 @@ def parse_transcript(path: str) -> dict:
             last_ts = ts
 
         if entry_type == "assistant":
-            turns += 1
             usage = entry.get("usage") or entry.get("message", {}).get("usage") or {}
-            tokens["input"] += usage.get("input_tokens", 0)
-            tokens["output"] += usage.get("output_tokens", 0)
-            tokens["cache_write"] += usage.get("cache_creation_input_tokens", 0)
-            tokens["cache_read"] += usage.get("cache_read_input_tokens", 0)
 
             entry_model = (entry.get("message", {}).get("model")
                           or usage.get("model") or entry.get("model"))
@@ -78,6 +83,29 @@ def parse_transcript(path: str) -> dict:
 
             if usage.get("stop_reason") == "max_tokens":
                 max_tokens_truncations += 1
+
+            if not usage:
+                turns += 1
+                continue
+
+            mid = (entry.get("message") or {}).get("id", "")
+            u = {
+                "input": usage.get("input_tokens", 0),
+                "output": usage.get("output_tokens", 0),
+                "cache_write": usage.get("cache_creation_input_tokens", 0),
+                "cache_read": usage.get("cache_read_input_tokens", 0),
+            }
+
+            if mid:
+                prev = _msg_best.get(mid)
+                if prev is None:
+                    _msg_best[mid] = u
+                    turns += 1
+                elif u["output"] > prev["output"]:
+                    _msg_best[mid] = u
+            else:
+                _noid_usages.append(u)
+                turns += 1
 
         elif entry_type in ("tool_use", "tool_call"):
             tool_calls += 1
@@ -98,6 +126,14 @@ def parse_transcript(path: str) -> dict:
                 tool_errors += 1
                 tool_name = entry.get("name") or entry.get("tool_name") or "unknown"
                 per_tool[tool_name]["errors"] += 1
+
+    # Sum deduplicated tokens
+    for u in _msg_best.values():
+        for k in tokens:
+            tokens[k] += u[k]
+    for u in _noid_usages:
+        for k in tokens:
+            tokens[k] += u[k]
 
     elapsed_ms = None
     if first_ts and last_ts:

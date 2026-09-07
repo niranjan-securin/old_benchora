@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from render_benchmark_report import (
     _render_css, _clean_component_name, _esc, _fmt_num, _fmt_pct, _fmt_usd,
     _severity_badge, _render_progress_bar,
+    _render_advisory_data, _render_advisory_overlay,
 )
 
 
@@ -81,6 +82,14 @@ def render_combined(scores: list[dict], prices: dict | None = None, model_displa
     target = scores[0].get("target", "Unknown")
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
+    merged_advisory_html: dict[str, str] = {}
+    for s in scores:
+        ah = s.get("advisory_html", {})
+        for fid, content in ah.items():
+            if fid not in merged_advisory_html:
+                merged_advisory_html[fid] = content
+    advisory_ids = set(merged_advisory_html.keys()) if merged_advisory_html else None
+
     parts = []
     parts.append(_render_css())
     parts.append(_header(model_name, target, n, now, [s.get("run_id", "") for s in scores]))
@@ -89,9 +98,14 @@ def render_combined(scores: list[dict], prices: dict | None = None, model_displa
     parts.append(_area_scores_table(scores))
     parts.append(_reproducibility(scores))
     parts.append(_endpoint_details(scores))
-    parts.append(_finding_details(scores))
+    parts.append(_endpoint_cross_comparison(scores))
+    parts.append(_finding_details(scores, advisory_ids))
+    parts.append(_vuln_cross_comparison(scores, advisory_ids))
     parts.append(_cost_comparison(scores, prices))
     parts.append(_token_comparison(scores))
+    if merged_advisory_html:
+        parts.append(_render_advisory_data(merged_advisory_html))
+        parts.append(_render_advisory_overlay())
     parts.append(_footer(now))
 
     return "\n".join(parts)
@@ -158,7 +172,7 @@ def _summary_table(scores) -> str:
     rows = []
     rows.append("<tr><td colspan='100%' style='background:var(--accent-bg);font-weight:600;color:var(--accent)'>Endpoint Coverage (Area 1)</td></tr>")
     rows.append(_row("TP", lambda s: _get_nested(s, "accuracy", "endpoint_coverage", "tp"), _fmt_num))
-    rows.append(_row("FP", lambda s: _get_nested(s, "accuracy", "endpoint_coverage", "fp"), _fmt_num))
+    rows.append(_row("Unmatched", lambda s: _get_nested(s, "accuracy", "endpoint_coverage", "unmatched"), _fmt_num))
     rows.append(_row("FN", lambda s: _get_nested(s, "accuracy", "endpoint_coverage", "fn"), _fmt_num))
     rows.append(_row("Precision", lambda s: _get_nested(s, "accuracy", "endpoint_coverage", "precision"), _fmt_pct))
     rows.append(_row("Recall", lambda s: _get_nested(s, "accuracy", "endpoint_coverage", "recall"), _fmt_pct))
@@ -166,7 +180,7 @@ def _summary_table(scores) -> str:
 
     rows.append("<tr><td colspan='100%' style='background:var(--accent-bg);font-weight:600;color:var(--accent)'>Vulnerability Analysis (Area 4)</td></tr>")
     rows.append(_row("TP", lambda s: _get_nested(s, "accuracy", "finding_accuracy", "tp"), _fmt_num))
-    rows.append(_row("FP", lambda s: _get_nested(s, "accuracy", "finding_accuracy", "fp"), _fmt_num))
+    rows.append(_row("Unmatched", lambda s: _get_nested(s, "accuracy", "finding_accuracy", "unmatched"), _fmt_num))
     rows.append(_row("FN", lambda s: _get_nested(s, "accuracy", "finding_accuracy", "fn"), _fmt_num))
     rows.append(_row("Precision", lambda s: _get_nested(s, "accuracy", "finding_accuracy", "precision"), _fmt_pct))
     rows.append(_row("Recall", lambda s: _get_nested(s, "accuracy", "finding_accuracy", "recall"), _fmt_pct))
@@ -408,7 +422,7 @@ def _endpoint_details(scores) -> str:
     for i, s in enumerate(scores):
         ep = _get_nested(s, "accuracy", "endpoint_coverage", default={})
         tp_eps = ep.get("tp_endpoints", [])
-        fp_eps = ep.get("false_positives", [])
+        unmatched_eps = ep.get("unmatched_endpoints", [])
         fn_eps = ep.get("missed", [])
         mismatch = ep.get("method_mismatch_credited", [])
 
@@ -427,14 +441,14 @@ def _endpoint_details(scores) -> str:
 
         run_id = s.get("run_id", f"Run {i+1}")
         tp_count = ep.get("tp", 0)
-        fp_count = ep.get("fp", 0)
+        unmatched_count = ep.get("unmatched", 0)
         fn_count = ep.get("fn", 0)
 
         sections += f"""<details>
-  <summary>Run {i+1}: {_esc(run_id)} — TP={tp_count} FP={fp_count} FN={fn_count}</summary>
+  <summary>Run {i+1}: {_esc(run_id)} — TP={tp_count} Unmatched={unmatched_count} FN={fn_count}</summary>
   <div class="detail-body">
     {_ep_list(tp_eps, "✓ True Positive Endpoints")}
-    {_ep_list(fp_eps, "✗ False Positive Endpoints")}
+    {_ep_list(unmatched_eps, "? Unmatched Endpoints")}
     {_ep_list(fn_eps, "✗ False Negative (Missed) Endpoints")}
     {_ep_list(mismatch, "↔ Method Mismatch Credited")}
   </div>
@@ -449,13 +463,14 @@ def _endpoint_details(scores) -> str:
 </div>"""
 
 
-def _finding_details(scores) -> str:
+def _finding_details(scores, advisory_ids: set | None = None) -> str:
     n = len(scores)
+    has_advisories = bool(advisory_ids)
     sections = ""
     for i, s in enumerate(scores):
         fa = _get_nested(s, "accuracy", "finding_accuracy", default={})
         tp_list = fa.get("tp_findings", [])
-        fp_list = fa.get("fp_findings", [])
+        unmatched_list = fa.get("unmatched_findings", [])
         fn_list = fa.get("missed_vulns", [])
 
         def _finding_table(findings, label):
@@ -472,12 +487,20 @@ def _finding_details(scores) -> str:
                 sev = f.get("severity", "")
                 title = f.get("title", "")
                 cvss = f.get("cvss_score")
-                rows += f"<tr><td><code>{_esc(ep)}</code></td><td>{_esc(title)}</td><td><code>{_esc(cwe)}</code></td><td>{_severity_badge(sev)}</td><td class='mono'>{_fmt_num(cvss, 1) if cvss else '—'}</td></tr>\n"
+                fid = f.get("finding_id") or f.get("id") or ""
+                adv_col = ""
+                if has_advisories:
+                    if fid and fid in advisory_ids:
+                        adv_col = f"<td><button class='adv-btn' onclick=\"showAdvisory('{_esc(fid)}')\">View Advisory</button></td>"
+                    else:
+                        adv_col = "<td></td>"
+                rows += f"<tr><td><code>{_esc(ep)}</code></td><td>{_esc(title)}</td><td><code>{_esc(cwe)}</code></td><td>{_severity_badge(sev)}</td><td class='mono'>{_fmt_num(cvss, 1) if cvss else '—'}</td>{adv_col}</tr>\n"
+            adv_header = "<th>Advisory</th>" if has_advisories else ""
             return f"""<details>
   <summary>{label} ({len(findings)})</summary>
   <div class="detail-body">
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Endpoint</th><th>Title</th><th>CWE</th><th>Severity</th><th>CVSS</th></tr></thead>
+      <thead><tr><th>Endpoint</th><th>Title</th><th>CWE</th><th>Severity</th><th>CVSS</th>{adv_header}</tr></thead>
       <tbody>{rows}</tbody>
     </table></div>
   </div>
@@ -485,14 +508,14 @@ def _finding_details(scores) -> str:
 
         run_id = s.get("run_id", f"Run {i+1}")
         tp_count = fa.get("tp", 0)
-        fp_count = fa.get("fp", 0)
+        unmatched_count = fa.get("unmatched", 0)
         fn_count = fa.get("fn", 0)
 
         sections += f"""<details>
-  <summary>Run {i+1}: {_esc(run_id)} — TP={tp_count} FP={fp_count} FN={fn_count}, F1={fa.get('f1', 0):.4f}</summary>
+  <summary>Run {i+1}: {_esc(run_id)} — TP={tp_count} Unmatched={unmatched_count} FN={fn_count}, F1={fa.get('f1', 0):.4f}</summary>
   <div class="detail-body">
     {_finding_table(tp_list, "✓ True Positive Findings")}
-    {_finding_table(fp_list, "✗ False Positive Findings")}
+    {_finding_table(unmatched_list, "? Unmatched Findings")}
     {_finding_table(fn_list, "✗ False Negative (Missed) Vulnerabilities")}
   </div>
 </details>"""
@@ -502,6 +525,155 @@ def _finding_details(scores) -> str:
 <div class="card">
   <button class="expand-all tag" style="cursor:pointer;margin-bottom:12px">Expand all</button>
   {sections}
+</div>
+</div>"""
+
+
+def _endpoint_cross_comparison(scores) -> str:
+    """Cross-run endpoint matrix: each GT endpoint as a row, runs as columns."""
+    n = len(scores)
+    gt_endpoints = set()
+    run_tp = []
+    run_unmatched = []
+    for s in scores:
+        ep = _get_nested(s, "accuracy", "endpoint_coverage", default={})
+        if not ep.get("has_ground_truth"):
+            return ""
+        tp_eps = set(ep.get("tp_endpoints", []))
+        unmatched_eps = set(ep.get("unmatched_endpoints", []))
+        fn_eps = set(ep.get("missed", []))
+        gt_endpoints |= tp_eps | fn_eps
+        run_tp.append(tp_eps)
+        run_unmatched.append(unmatched_eps)
+
+    if not gt_endpoints:
+        return ""
+
+    headers = "".join(f"<th>Run {i+1}</th>" for i in range(n))
+    rows = ""
+    for ep in sorted(gt_endpoints):
+        cells = ""
+        for i in range(n):
+            if ep in run_tp[i]:
+                cells += "<td style='text-align:center;color:var(--green);font-weight:600'>&#10003;</td>"
+            else:
+                cells += "<td style='text-align:center;color:var(--red);font-weight:600'>&#10007;</td>"
+        hit_count = sum(1 for i in range(n) if ep in run_tp[i])
+        consistency = f"{hit_count}/{n}"
+        rows += f"<tr><td><code style='font-size:0.8rem'>{_esc(ep)}</code></td>{cells}<td class='mono' style='text-align:center'>{consistency}</td></tr>\n"
+
+    # Unmatched endpoints (not in GT)
+    all_unmatched = set()
+    for um_set in run_unmatched:
+        all_unmatched |= um_set
+    unmatched_only = all_unmatched - gt_endpoints
+    unmatched_rows = ""
+    for ep in sorted(unmatched_only):
+        cells = ""
+        for i in range(n):
+            if ep in run_unmatched[i]:
+                cells += "<td style='text-align:center;color:var(--orange);font-size:0.8rem'>Unmatched</td>"
+            else:
+                cells += "<td style='text-align:center'>—</td>"
+        unmatched_rows += f"<tr style='background:var(--bg-muted)'><td><code style='font-size:0.8rem'>{_esc(ep)}</code></td>{cells}<td></td></tr>\n"
+
+    return f"""<div class="container">
+<h2>Endpoint Cross-Run Matrix</h2>
+<div class="card">
+  <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px">
+    Each row = one GT endpoint. &#10003; = found (TP), &#10007; = missed (FN).
+    {f'<span style="color:var(--orange)">Unmatched</span> rows are findings not in ground truth.' if unmatched_only else ''}
+  </p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Endpoint</th>{headers}<th>Consistency</th></tr></thead>
+    <tbody>{rows}{unmatched_rows}</tbody>
+  </table></div>
+</div>
+</div>"""
+
+
+def _vuln_cross_comparison(scores, advisory_ids: set | None = None) -> str:
+    """Cross-run vulnerability matrix: each finding keyed by CWE+title, runs as columns."""
+    n = len(scores)
+    has_advisories = bool(advisory_ids)
+
+    all_vulns = {}
+    run_tp_keys = []
+    run_um_keys = []
+    for i, s in enumerate(scores):
+        fa = _get_nested(s, "accuracy", "finding_accuracy", default={})
+        if not fa.get("has_ground_truth"):
+            return ""
+        tp_map = {}
+        for f in fa.get("tp_findings", []):
+            cwe = str(f.get("cwe", ""))
+            title = (f.get("title", "") or "")[:60].strip()
+            key = f"{cwe}|{title}".lower()
+            tp_map[key] = f
+            if key not in all_vulns:
+                all_vulns[key] = f
+        um_map = {}
+        for f in fa.get("unmatched_findings", []):
+            cwe = str(f.get("cwe", ""))
+            title = (f.get("title", "") or "")[:60].strip()
+            key = f"{cwe}|{title}".lower()
+            um_map[key] = f
+            if key not in all_vulns:
+                all_vulns[key] = f
+        for f in fa.get("missed_vulns", []):
+            cwe = str(f.get("cwe", ""))
+            title = (f.get("title", "") or "")[:60].strip()
+            key = f"{cwe}|{title}".lower()
+            if key not in all_vulns:
+                all_vulns[key] = f
+        run_tp_keys.append(tp_map)
+        run_um_keys.append(um_map)
+
+    if not all_vulns:
+        return ""
+
+    headers = "".join(f"<th>Run {i+1}</th>" for i in range(n))
+    adv_header = "<th>Advisory</th>" if has_advisories else ""
+    rows = ""
+    for key in sorted(all_vulns.keys()):
+        f = all_vulns[key]
+        cwe = str(f.get("cwe", ""))
+        title = (f.get("title", "") or "")[:60].strip()
+        sev = f.get("severity", "")
+        cells = ""
+        any_fid = ""
+        for i in range(n):
+            if key in run_tp_keys[i]:
+                cells += "<td style='text-align:center;color:var(--green);font-weight:600'>TP</td>"
+                fid = run_tp_keys[i][key].get("finding_id") or run_tp_keys[i][key].get("id") or ""
+                if fid:
+                    any_fid = fid
+            elif key in run_um_keys[i]:
+                cells += "<td style='text-align:center;color:var(--orange);font-weight:600'>Unmatched</td>"
+                fid = run_um_keys[i][key].get("finding_id") or run_um_keys[i][key].get("id") or ""
+                if fid:
+                    any_fid = fid
+            else:
+                cells += "<td style='text-align:center;color:var(--red)'>FN</td>"
+        tp_count = sum(1 for i in range(n) if key in run_tp_keys[i])
+        adv_col = ""
+        if has_advisories:
+            if any_fid and any_fid in advisory_ids:
+                adv_col = f"<td><button class='adv-btn' onclick=\"showAdvisory('{_esc(any_fid)}')\">View</button></td>"
+            else:
+                adv_col = "<td></td>"
+        rows += f"<tr><td><code>{_esc(cwe)}</code></td><td style='font-size:0.82rem'>{_esc(title)}</td><td>{_severity_badge(sev)}</td>{cells}<td class='mono' style='text-align:center'>{tp_count}/{n}</td>{adv_col}</tr>\n"
+
+    return f"""<div class="container">
+<h2>Vulnerability Cross-Run Matrix</h2>
+<div class="card">
+  <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px">
+    Each row = one unique finding (CWE + title). Shows TP/Unmatched/FN status per run.
+  </p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>CWE</th><th>Title</th><th>Severity</th>{headers}<th>TP Rate</th>{adv_header}</tr></thead>
+    <tbody>{rows}</tbody>
+  </table></div>
 </div>
 </div>"""
 
@@ -671,9 +843,9 @@ def main():
 
     with open(output, "w", encoding="utf-8", newline="") as f:
         f.write("<!doctype html>\n<html lang='en'>\n<head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>\n")
-        f.write(html_content.split("</style>")[0] + "</style>\n</head>\n<body>\n")
+        f.write(html_content.split("</style>")[0] + "</style>\n</head>\n<body>\n<!--email_off-->\n")
         f.write(html_content.split("</style>", 1)[1])
-        f.write("\n</body>\n</html>")
+        f.write("\n<!--/email_off-->\n</body>\n</html>")
 
     print(f"Combined report written to {output}")
     print(f"  Runs: {len(scores)}")

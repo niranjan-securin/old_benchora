@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
 import html
 import json
 import os
@@ -103,6 +104,9 @@ def render_report(score: dict, prices: dict | None = None) -> str:
     area_names = _build_area_name_map()
     finding_details = score.get("finding_details", {})
 
+    advisory_html = score.get("advisory_html", {})
+    advisory_ids = set(advisory_html.keys()) if advisory_html else None
+
     endpoint_cov = accuracy.get("endpoint_coverage", {})
     finding_acc = accuracy.get("finding_accuracy", {})
     exploitation = accuracy.get("exploitation", {})
@@ -131,7 +135,7 @@ def render_report(score: dict, prices: dict | None = None) -> str:
     parts.append(_render_header(model, target, run_id, now))
     parts.append(_render_kpi_strip(endpoint_cov, finding_acc, exploitation, full_cost, refusals, reliability, runtime))
     parts.append(_render_endpoint_coverage(endpoint_cov))
-    parts.append(_render_finding_accuracy(finding_acc, finding_details))
+    parts.append(_render_finding_accuracy(finding_acc, finding_details, advisory_ids))
     parts.append(_render_exploitation(exploitation))
     parts.append(_render_duplicates(duplicates))
     parts.append(_render_refusals(refusals))
@@ -141,8 +145,11 @@ def render_report(score: dict, prices: dict | None = None) -> str:
     parts.append(_render_runtime(runtime))
     parts.append(_render_area_scores(area_scores, area_names))
     parts.append(_render_component_pipeline(score.get("component_results", {}), reliability.get("gates_detail", {})))
-    parts.append(_render_all_findings_appendix(finding_details, _referenced_finding_ids(accuracy)))
+    parts.append(_render_all_findings_appendix(finding_details, _referenced_finding_ids(accuracy), advisory_ids))
     parts.append(_render_component_detail(by_component, cost_by_component, full_cost))
+    if advisory_html:
+        parts.append(_render_advisory_data(advisory_html))
+        parts.append(_render_advisory_overlay())
     parts.append(_render_footer(now))
 
     return "\n".join(parts)
@@ -369,6 +376,16 @@ pre.fmd-raw {
 details.fmd, details.fmd-outer { content-visibility: auto; contain-intrinsic-size: auto 40px; }
 .fmd-note { font-size: 0.7rem; color: var(--red); }
 .fmd-list > details.fmd-outer { border-bottom: 1px solid var(--border); padding-bottom: 3px; }
+/* Advisory modal overlay */
+.adv-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999; background:rgba(0,0,0,0.6); backdrop-filter:blur(2px); }
+.adv-overlay.active { display:flex; flex-direction:column; }
+.adv-header { display:flex; align-items:center; justify-content:space-between; padding:10px 20px; background:var(--bg-card); border-bottom:3px solid var(--accent); flex-shrink:0; }
+.adv-header h3 { font-size:0.95rem; margin:0; max-width:80%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.adv-close { background:var(--red); color:#fff; border:none; border-radius:4px; padding:6px 16px; cursor:pointer; font-weight:600; font-size:0.85rem; }
+.adv-close:hover { opacity:0.85; }
+.adv-iframe { flex:1; border:none; background:#fff; width:100%; min-height:0; }
+.adv-btn { cursor:pointer; font-size:0.72rem; background:var(--accent-bg); color:var(--accent-dark); border:1px solid var(--accent-light); border-radius:4px; padding:2px 8px; font-weight:600; }
+.adv-btn:hover { background:var(--accent); color:#fff; }
 </style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -402,11 +419,61 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
   });
+  // Advisory modal
+  window.showAdvisory = function(fid) {
+    var el = document.getElementById('advisory-data-' + fid);
+    if (!el) return;
+    try { var html = atob(el.dataset.html); } catch(e) { return; }
+    document.getElementById('adv-title').textContent = el.dataset.title || fid;
+    document.getElementById('adv-iframe').srcdoc = html;
+    document.getElementById('adv-overlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+  };
+  window.closeAdvisory = function() {
+    document.getElementById('adv-overlay').classList.remove('active');
+    document.body.style.overflow = '';
+    document.getElementById('adv-iframe').srcdoc = '';
+  };
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeAdvisory(); });
 });
 </script>"""
 
 
 _CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _render_advisory_data(advisory_html: dict) -> str:
+    """Emit hidden divs holding base64-encoded advisory HTML for modal display."""
+    if not advisory_html:
+        return ""
+    parts = ['<div id="advisory-store" hidden>']
+    for fid, html_content in advisory_html.items():
+        title = ""
+        m = re.search(r"<title>(.*?)</title>", html_content, re.IGNORECASE | re.DOTALL)
+        if m:
+            title = m.group(1).strip()
+            if title.startswith("Advisory:"):
+                title = title[9:].strip()
+        b64 = base64.b64encode(html_content.encode("utf-8")).decode("ascii")
+        parts.append(
+            f'<div id="advisory-data-{_esc(fid)}" '
+            f'data-title="{_esc(title)}" '
+            f'data-html="{b64}"></div>'
+        )
+    parts.append("</div>")
+    return "\n".join(parts)
+
+
+def _render_advisory_overlay() -> str:
+    """Emit the modal overlay HTML structure with iframe."""
+    return """
+<div id="adv-overlay" class="adv-overlay" onclick="if(event.target===this)closeAdvisory()">
+  <div class="adv-header">
+    <h3 id="adv-title"></h3>
+    <button class="adv-close" onclick="closeAdvisory()">Close</button>
+  </div>
+  <iframe id="adv-iframe" class="adv-iframe" sandbox="allow-same-origin"></iframe>
+</div>"""
 
 
 def _raw_md_block(text: str) -> str:
@@ -440,10 +507,10 @@ def _raw_md_details(detail: dict, note: str = "") -> str:
 
 
 def _referenced_finding_ids(accuracy: dict) -> set:
-    """finding_ids reachable from a TP/FP/FN table row."""
+    """finding_ids reachable from a TP/Unmatched/FN table row."""
     out = set()
     fa = (accuracy or {}).get("finding_accuracy", {}) or {}
-    for key in ("tp_findings", "fp_findings", "missed_vulns"):
+    for key in ("tp_findings", "unmatched_findings", "missed_vulns"):
         for f in (fa.get(key) or []):
             if isinstance(f, dict):
                 fid = f.get("finding_id")
@@ -452,11 +519,12 @@ def _referenced_finding_ids(accuracy: dict) -> set:
     return out
 
 
-def _render_all_findings_appendix(finding_details: dict, referenced: set) -> str:
-    """Every finding.md, verbatim — including any not referenced by a TP/FP row."""
+def _render_all_findings_appendix(finding_details: dict, referenced: set, advisory_ids: set | None = None) -> str:
+    """Every finding.md, verbatim — including any not referenced by a TP/Unmatched row."""
     if not finding_details:
         return ""
     total = len(finding_details)
+    has_advisories = bool(advisory_ids)
 
     def _sortkey(item):
         fid, d = item
@@ -472,26 +540,29 @@ def _render_all_findings_appendix(finding_details: dict, referenced: set) -> str
         note = ""
         if fid not in referenced:
             orphans += 1
-            note = "not referenced by any TP/FP/FN row"
+            note = "not referenced by any TP/Unmatched/FN row"
         title = d.get("title", "") or "(no title in frontmatter)"
         sev = d.get("severity", "") or "n/a"
         cvss = d.get("cvss_score")
         cvss_s = f" &middot; CVSS {cvss}" if cvss not in (None, "") else ""
+        adv_btn = ""
+        if has_advisories and fid in advisory_ids:
+            adv_btn = f" <button class='adv-btn' onclick=\"event.stopPropagation();showAdvisory('{_esc(fid)}')\">View Advisory</button>"
         body = _raw_md_details(d, note) or _raw_md_block(d.get("raw_markdown", ""))
         blocks.append(
             '<details class="fmd-outer" style="margin:4px 0">'
             f'<summary style="font-size:0.82rem"><code>{_esc(fid)}</code> &mdash; '
             f'{_esc(title)} <span class="tag">{_esc(sev)}</span>{cvss_s}'
             + (f' <span class="fmd-note">{_esc(note)}</span>' if note else "")
-            + "</summary>" + body + "</details>"
+            + adv_btn + "</summary>" + body + "</details>"
         )
 
     orphan_line = (
         f'<p style="font-size:0.82rem;color:var(--red)"><strong>{orphans}</strong> of these '
-        f'are referenced by no TP/FP/FN table row and would be invisible without this appendix.</p>'
+        f'are referenced by no TP/Unmatched/FN table row and would be invisible without this appendix.</p>'
         if orphans else
         '<p style="font-size:0.82rem;color:var(--text-secondary)">Every finding.md is also '
-        'reachable from a TP/FP/FN table row above.</p>'
+        'reachable from a TP/Unmatched/FN table row above.</p>'
     )
 
     return f"""<div class="container">
@@ -581,7 +652,7 @@ def _render_endpoint_coverage(ep: dict) -> str:
         return '<div class="container"><h2>1 &mdash; Endpoint Coverage</h2><div class="card"><p>No ground truth available.</p></div></div>'
 
     tp = ep.get("tp", 0)
-    fp = ep.get("fp", 0)
+    unmatched = ep.get("unmatched", 0)
     fn = ep.get("fn", 0)
     prec = ep.get("precision", 0)
     rec = ep.get("recall", 0)
@@ -591,12 +662,12 @@ def _render_endpoint_coverage(ep: dict) -> str:
     filtered_404 = ep.get("filtered_404_only", 0)
 
     tp_eps = ep.get("tp_endpoints", [])
-    fp_eps = ep.get("false_positives", [])
+    unmatched_eps = ep.get("unmatched_endpoints", [])
     fn_eps = ep.get("missed", [])
     mismatch_credited = ep.get("method_mismatch_credited", [])
     mismatch_probes = ep.get("method_mismatch_probes", [])
 
-    formula = f"Precision = TP/(TP+FP) = {tp}/({tp}+{fp}) = {_fmt_pct(prec)}\nRecall = TP/(TP+FN) = {tp}/({tp}+{fn}) = {_fmt_pct(rec)}\nF1 = 2·P·R/(P+R) = {f1:.4f}"
+    formula = f"Precision = TP/(TP+Unmatched) = {tp}/({tp}+{unmatched}) = {_fmt_pct(prec)}\nRecall = TP/(TP+FN) = {tp}/({tp}+{fn}) = {_fmt_pct(rec)}\nF1 = 2·P·R/(P+R) = {f1:.4f}"
 
     return f"""<div class="container">
 <h2>1 &mdash; Endpoint Coverage (Area 1: Reconnaissance)</h2>
@@ -605,8 +676,8 @@ def _render_endpoint_coverage(ep: dict) -> str:
     <div class="metric-box accent"><div class="val">{gt}</div><div class="label">GT Endpoints</div></div>
     <div class="metric-box accent"><div class="val">{found}</div><div class="label">Found Endpoints</div></div>
     <div class="metric-box green"><div class="val">{tp}</div><div class="label">True Positives</div></div>
-    <div class="metric-box red"><div class="val">{fp}</div><div class="label">False Positives</div></div>
-    <div class="metric-box red"><div class="val">{fn}</div><div class="label">False Negatives</div></div>
+    <div class="metric-box orange"><div class="val">{unmatched}</div><div class="label">Unmatched</div></div>
+    <div class="metric-box red"><div class="val">{fn}</div><div class="label">Missed (FN)</div></div>
     <div class="metric-box"><div class="val">{filtered_404}</div><div class="label">Filtered (404)</div></div>
   </div>
   <div class="metric-grid">
@@ -619,14 +690,14 @@ def _render_endpoint_coverage(ep: dict) -> str:
   <h3>Source of Truth</h3>
   <p style="font-size:0.88rem;color:var(--text-secondary)">
     Path normalization: template vars → <code>{{id}}</code>, trailing slashes stripped, hyphens/underscores unified, double slashes collapsed.
-    Status-code-aware: 404-only endpoints filtered out. Method mismatch: when a probe (e.g. OPTIONS/HEAD) hits a path that exists in GT under a different method, the GT entry is credited as TP (only if not already matched directly) and the probe is excluded from FP.
+    Status-code-aware: 404-only endpoints filtered out. Method mismatch: when a probe (e.g. OPTIONS/HEAD) hits a path that exists in GT under a different method, the GT entry is credited as TP (only if not already matched directly) and the probe is excluded from unmatched.
   </p>
   <button class="expand-all tag" style="cursor:pointer;margin:8px 0">Expand all</button>
   {_render_endpoint_list(tp_eps, "✓ True Positive Endpoints")}
-  {_render_endpoint_list(fp_eps, "✗ False Positive Endpoints")}
-  {_render_endpoint_list(fn_eps, "✗ False Negative (Missed) Endpoints")}
+  {_render_endpoint_list(unmatched_eps, "? Unmatched Endpoints")}
+  {_render_endpoint_list(fn_eps, "✗ Missed Endpoints (FN)")}
   {_render_endpoint_list(mismatch_credited, "↔ Method Mismatch Credited (GT entries credited via different-method probe)")}
-  {_render_endpoint_list(mismatch_probes, "↔ Method Mismatch Probes (excluded from FP — path exists in GT under different method)")}
+  {_render_endpoint_list(mismatch_probes, "↔ Method Mismatch Probes (excluded from unmatched — path exists in GT under different method)")}
 </div>
 </div>"""
 
@@ -699,11 +770,13 @@ def _render_finding_detail_card(detail: dict) -> str:
     return "\n".join(parts) if parts else '<span style="font-size:0.82rem;color:var(--text-secondary)">No detail file available for this finding.</span>'
 
 
-def _render_finding_table(findings: list, label: str, finding_details: dict | None = None) -> str:
+def _render_finding_table(findings: list, label: str, finding_details: dict | None = None, advisory_ids: set | None = None) -> str:
     if not findings:
         return ""
     has_id = any(f.get("id") for f in findings)
     has_fid = any(f.get("finding_id") for f in findings)
+    has_advisories = bool(advisory_ids)
+    col_count = 6 + (1 if has_id else 0) + (1 if has_advisories else 0)
     rows = ""
     for i, f in enumerate(findings):
         ep = f.get("endpoint", "")
@@ -728,7 +801,7 @@ def _render_finding_table(findings: list, label: str, finding_details: dict | No
             detail_content = _render_finding_detail_card(detail)
             detail_html = (
                 f'<tr class="finding-detail-row" id="detail-{i}-{_esc(finding_id)}">'
-                f'<td colspan="{"7" if has_id else "6"}" style="padding:0;border:none">'
+                f'<td colspan="{col_count}" style="padding:0;border:none">'
                 f'<details style="margin:0"><summary style="font-size:0.8rem;padding:4px 12px;border-radius:0">View finding.md details</summary>'
                 f'<div class="detail-body" style="border-radius:0 0 8px 8px;margin:0">{detail_content}</div>'
                 f'</details></td></tr>\n'
@@ -742,26 +815,35 @@ def _render_finding_table(findings: list, label: str, finding_details: dict | No
             vs_color = "#00B894" if "verified" in vs.lower() else "#6b7280"
             title_display += f' <span style="font-size:0.7rem;color:{vs_color};font-weight:600">[{_esc(vs)}]</span>'
 
-        rows += f"<tr>{id_col}<td><code>{_esc(ep)}</code></td><td>{title_display}</td><td><code>{_esc(cwe)}</code></td><td>{_severity_badge(sev)}</td><td class='mono'>{_fmt_num(cvss, 1) if cvss else '—'}</td></tr>\n{detail_html}"
+        adv_col = ""
+        if has_advisories:
+            lookup_id = finding_id or fid
+            if lookup_id and lookup_id in advisory_ids:
+                adv_col = f"<td><button class='adv-btn' onclick=\"showAdvisory('{_esc(lookup_id)}')\">View Advisory</button></td>"
+            else:
+                adv_col = "<td></td>"
+
+        rows += f"<tr>{id_col}<td><code>{_esc(ep)}</code></td><td>{title_display}</td><td><code>{_esc(cwe)}</code></td><td>{_severity_badge(sev)}</td><td class='mono'>{_fmt_num(cvss, 1) if cvss else '—'}</td>{adv_col}</tr>\n{detail_html}"
 
     id_header = "<th>ID</th>" if has_id else ""
+    adv_header = "<th>Advisory</th>" if has_advisories else ""
     return f"""<details>
   <summary>{label} ({len(findings)})</summary>
   <div class="detail-body">
     <div class="tbl-wrap"><table>
-      <thead><tr>{id_header}<th>Endpoint</th><th>Title</th><th>CWE</th><th>Severity</th><th>CVSS</th></tr></thead>
+      <thead><tr>{id_header}<th>Endpoint</th><th>Title</th><th>CWE</th><th>Severity</th><th>CVSS</th>{adv_header}</tr></thead>
       <tbody>{rows}</tbody>
     </table></div>
   </div>
 </details>"""
 
 
-def _render_finding_accuracy(fa: dict, finding_details: dict | None = None) -> str:
+def _render_finding_accuracy(fa: dict, finding_details: dict | None = None, advisory_ids: set | None = None) -> str:
     if not fa.get("has_ground_truth"):
         return '<div class="container"><h2>4 &mdash; Vulnerability Analysis</h2><div class="card"><p>No ground truth available.</p></div></div>'
 
     tp = fa.get("tp", 0)
-    fp = fa.get("fp", 0)
+    unmatched = fa.get("unmatched", 0)
     fn = fa.get("fn", 0)
     prec = fa.get("precision", 0)
     rec = fa.get("recall", 0)
@@ -773,11 +855,11 @@ def _render_finding_accuracy(fa: dict, finding_details: dict | None = None) -> s
     sev_acc = fa.get("severity_accuracy", 0)
 
     tp_findings = fa.get("tp_findings", [])
-    fp_findings = fa.get("fp_findings", [])
+    unmatched_list = fa.get("unmatched_findings", [])
     fn_vulns = fa.get("missed_vulns", [])
     fd = finding_details or {}
 
-    formula = f"Precision = TP/(TP+FP) = {tp}/({tp}+{fp}) = {_fmt_pct(prec)}\nRecall = TP/(TP+FN) = {tp}/({tp}+{fn}) = {_fmt_pct(rec)}\nF1 = 2·P·R/(P+R) = {f1:.4f}"
+    formula = f"Precision = TP/(TP+Unmatched) = {tp}/({tp}+{unmatched}) = {_fmt_pct(prec)}\nRecall = TP/(TP+FN) = {tp}/({tp}+{fn}) = {_fmt_pct(rec)}\nF1 = 2·P·R/(P+R) = {f1:.4f}"
 
     owasp_tags = " ".join(f'<span class="tag">{_esc(c)}</span>' for c in owasp_cats) if owasp_cats else "—"
 
@@ -788,8 +870,8 @@ def _render_finding_accuracy(fa: dict, finding_details: dict | None = None) -> s
     <div class="metric-box accent"><div class="val">{gt}</div><div class="label">GT Vulnerabilities</div></div>
     <div class="metric-box accent"><div class="val">{found}</div><div class="label">Found (deduped)</div></div>
     <div class="metric-box green"><div class="val">{tp}</div><div class="label">True Positives</div></div>
-    <div class="metric-box red"><div class="val">{fp}</div><div class="label">False Positives</div></div>
-    <div class="metric-box red"><div class="val">{fn}</div><div class="label">False Negatives</div></div>
+    <div class="metric-box orange"><div class="val">{unmatched}</div><div class="label">Unmatched</div></div>
+    <div class="metric-box red"><div class="val">{fn}</div><div class="label">Missed (FN)</div></div>
     <div class="metric-box"><div class="val">{_fmt_pct(sev_acc)}</div><div class="label">Severity Accuracy</div></div>
   </div>
   <div class="metric-grid">
@@ -809,9 +891,9 @@ def _render_finding_accuracy(fa: dict, finding_details: dict | None = None) -> s
     <strong>Content dedup:</strong> CWE + first 60 chars of title as dedup key.
   </p>
   <button class="expand-all tag" style="cursor:pointer;margin:8px 0">Expand all</button>
-  {_render_finding_table(tp_findings, "✓ True Positive Findings", fd)}
-  {_render_finding_table(fp_findings, "✗ False Positive Findings", fd)}
-  {_render_finding_table(fn_vulns, "✗ False Negative (Missed) Vulnerabilities", fd)}
+  {_render_finding_table(tp_findings, "✓ True Positive Findings", fd, advisory_ids)}
+  {_render_finding_table(unmatched_list, "? Unmatched Findings", fd, advisory_ids)}
+  {_render_finding_table(fn_vulns, "✗ Missed Vulnerabilities (FN)", fd, advisory_ids)}
 </div>
 </div>"""
 
@@ -1699,9 +1781,9 @@ def main():
 
     with open(output, "w", encoding="utf-8", newline="") as f:
         f.write("<!doctype html>\n<html lang='en'>\n<head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>\n")
-        f.write(html_content.split("</style>")[0] + "</style>\n</head>\n<body>\n")
+        f.write(html_content.split("</style>")[0] + "</style>\n</head>\n<body>\n<!--email_off-->\n")
         f.write(html_content.split("</style>", 1)[1])
-        f.write("\n</body>\n</html>")
+        f.write("\n<!--/email_off-->\n</body>\n</html>")
 
     print(f"Report written to {output}")
     print(f"  Score: {args.score}")

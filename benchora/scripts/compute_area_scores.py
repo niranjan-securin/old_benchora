@@ -2,7 +2,7 @@
 """compute_area_scores.py — compute 11 evaluation area scores for a run.
 
 Two grading tracks:
-  GT-based (Areas 1, 4, 5): score from TP/FP/FN accuracy metrics
+  GT-based (Areas 1, 4, 5): score from TP/Unmatched/FN accuracy metrics
   Test-case (Areas 2, 3, 6, 7, 8): score from test case pass rate
   Computed (Areas 9, 10, 11): score from reliability/cost/reproducibility metrics
 
@@ -38,7 +38,7 @@ def score_area_1_recon(score: dict) -> dict:
         "score": acc.get("recall", 0.0),
         "method": "gt_based",
         "detail": {
-            "tp": acc.get("tp"), "fp": acc.get("fp"), "fn": acc.get("fn"),
+            "tp": acc.get("tp"), "unmatched": acc.get("unmatched"), "fn": acc.get("fn"),
             "precision": acc.get("precision"), "recall": acc.get("recall"), "f1": acc.get("f1"),
         },
     }
@@ -64,7 +64,7 @@ def score_area_4_vuln_analysis(score: dict) -> dict:
         "score": acc.get("f1", 0.0),
         "method": "gt_based",
         "detail": {
-            "tp": acc.get("tp"), "fp": acc.get("fp"), "fn": acc.get("fn"),
+            "tp": acc.get("tp"), "unmatched": acc.get("unmatched"), "fn": acc.get("fn"),
             "precision": acc.get("precision"), "recall": acc.get("recall"), "f1": acc.get("f1"),
             "owasp_breadth": acc.get("owasp_breadth"),
         },

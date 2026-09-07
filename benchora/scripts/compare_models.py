@@ -276,16 +276,16 @@ def compare(aegis_iq: str, target: str, gt_dir: str = None, score_paths: list[st
             fa = acc.get("finding_accuracy", {})
             ex = acc.get("exploitation", {})
             rd["endpoint_coverage"] = {
-                "tp": ec.get("tp", 0), "fp": ec.get("fp", 0), "fn": ec.get("fn", 0),
+                "tp": ec.get("tp", 0), "unmatched": ec.get("unmatched", 0), "fn": ec.get("fn", 0),
                 "precision": ec.get("precision"), "recall": ec.get("recall"), "f1": ec.get("f1"),
                 "missed": ec.get("missed", [])[:10],
-                "false_positives": ec.get("false_positives", [])[:10],
+                "unmatched_endpoints": ec.get("unmatched_endpoints", [])[:10],
             } if ec.get("has_ground_truth") else None
             rd["finding_accuracy"] = {
-                "tp": fa.get("tp", 0), "fp": fa.get("fp", 0), "fn": fa.get("fn", 0),
+                "tp": fa.get("tp", 0), "unmatched": fa.get("unmatched", 0), "fn": fa.get("fn", 0),
                 "precision": fa.get("precision"), "recall": fa.get("recall"), "f1": fa.get("f1"),
                 "tp_findings": fa.get("tp_findings", []),
-                "fp_findings": [{"title": f.get("title", ""), "cwe": f.get("cwe", ""), "component": f.get("component", "")} for f in fa.get("fp_findings", [])[:20]],
+                "unmatched_findings": [{"title": f.get("title", ""), "cwe": f.get("cwe", ""), "component": f.get("component", "")} for f in fa.get("unmatched_findings", [])[:20]],
                 "missed_vulns": fa.get("missed_vulns", []),
             } if fa.get("has_ground_truth") else None
             rd["exploitation"] = {

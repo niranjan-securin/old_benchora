@@ -69,7 +69,7 @@ recomputed = compute_finding_accuracy(tmpdir, gt_dir)
 
 print("\nArea 4 (vulnerability analysis) — run 2")
 print(f"{'':22} {'as scored':>12} {'claims only':>13}")
-for k in ("tp", "fp", "fn", "precision", "recall", "f1"):
+for k in ("tp", "unmatched", "fn", "precision", "recall", "f1"):
     print(f"{k:22} {str(orig.get(k)):>12} {str(recomputed.get(k)):>13}")
 
 json.dump(

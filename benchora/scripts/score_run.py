@@ -19,9 +19,11 @@ then tries to locate them via trace.jsonl.
 from __future__ import annotations
 
 import argparse
+import base64
 import glob as globmod
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -29,6 +31,40 @@ SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPTS_DIR)
 from resolve_gates import resolve_gates  # noqa: E402
 from extract_judge_verdict import extract_judge_verdict  # noqa: E402
+
+
+def collect_advisory_html(run_dir: str) -> dict[str, str]:
+    """Collect advisory HTML files keyed by finding_id.
+
+    Searches reporting/ advisories first (deliverable copy), then
+    component-level advisories as fallback. Returns {finding_id: html_string}.
+    """
+    result: dict[str, str] = {}
+    advisory_dirs: list[tuple[int, str]] = []
+
+    for root, _dirs, files in os.walk(run_dir):
+        if os.path.basename(root) == "advisories":
+            rel = os.path.relpath(root, run_dir)
+            priority = 0 if rel.startswith("reporting") else 1
+            advisory_dirs.append((priority, root))
+
+    advisory_dirs.sort(key=lambda x: x[0])
+
+    for _priority, adir in advisory_dirs:
+        for fname in sorted(os.listdir(adir)):
+            if not fname.endswith(".html") or fname == "index.html":
+                continue
+            fid = fname[:-5]
+            if fid in result:
+                continue
+            fpath = os.path.join(adir, fname)
+            try:
+                with open(fpath, encoding="utf-8", errors="replace") as f:
+                    result[fid] = f.read()
+            except OSError:
+                continue
+
+    return result
 
 
 def run_script(name: str, args: list[str], label: str = "") -> dict | None:
@@ -105,6 +141,12 @@ def main():
     ap.add_argument("--prices", help="Path to model_prices.json for cost computation")
     ap.add_argument("--output", help="Output path for benchora_score.json (default: <run-dir>/benchora_score.json)")
     ap.add_argument("--json", action="store_true", help="Print final score to stdout as JSON")
+    ap.add_argument("--judge-model", default="claude-haiku-4-5",
+                    help="LLM model for semantic TP/Unmatched/FN matching (default: claude-haiku-4-5)")
+    ap.add_argument("--no-judge", action="store_true",
+                    help="Disable LLM judge, use rule-based matching only")
+    ap.add_argument("--judge-cache-dir", default=None,
+                    help="Directory for judge cache file (default: same as --run-dir)")
     args = ap.parse_args()
 
     run_dir = os.path.abspath(args.run_dir)
@@ -215,73 +257,83 @@ def main():
                 }
                 print(f"  Cost computed from transcript tokens: ${total_cost:.2f}")
 
-    # ---- Override cost/timing from bench folder if available ----
-    # Priority: (1) bench C3_cost per component, (2) bench A1_tokens × model_prices,
-    #           (3) transcript-parsed tokens × model_prices (already computed above)
+    # ---- Cost priority (matches AgentsView methodology) ----
+    # (1) transcript tokens (deduped by message.id) × model_prices  (already above)
+    # (2) bench A1_tokens × model_prices  (fallback if no transcripts)
+    # (3) bench C3_cost provider-reported  (last resort — may use stale prices)
+    # Bench data is always stored as metadata regardless of which source wins.
     bench_results_path = os.path.join(run_dir, "bench", "benchmark_results.json")
     if os.path.exists(bench_results_path):
         try:
             with open(bench_results_path, encoding="utf-8") as f:
                 bench_data = json.load(f)
-            bench_cost = bench_data.get("overall", {}).get("total_cost")
-            if bench_cost is not None:
-                # Priority 1: bench has pre-computed cost (provider-reported)
-                by_comp_costs = {}
-                for cname, cdata in (bench_data.get("components") or {}).items():
-                    c3 = (cdata.get("C") or {}).get("C3_cost")
-                    if c3 is not None:
-                        by_comp_costs[cname] = round(c3, 4)
-                score["cost"] = {
-                    "full_run_usd": round(bench_cost, 3),
-                    "by_component": by_comp_costs,
-                    "source": "bench_cost",
+
+            # Always capture bench C3_cost and A1_tokens as metadata
+            bench_c3 = bench_data.get("overall", {}).get("total_cost")
+            bench_c3_by_comp = {}
+            for cname, cdata in (bench_data.get("components") or {}).items():
+                c3 = (cdata.get("C") or {}).get("C3_cost")
+                if c3 is not None:
+                    bench_c3_by_comp[cname] = round(c3, 4)
+            if bench_c3 is not None:
+                score["_bench_c3_cost"] = {
+                    "full_run_usd": round(bench_c3, 3),
+                    "by_component": bench_c3_by_comp,
                 }
-                print(f"  Cost from bench (provider-reported): ${bench_cost:.2f}")
-            else:
-                # Priority 2: bench has token counts but no cost — compute from
-                # bench A1_tokens × model_prices. Bench tokens are canonical
-                # (include subagent tokens that transcript parsing may miss).
-                model_name = score.get("model", "")
-                bench_prices = None
-                if prices_path and model_name and os.path.exists(prices_path):
-                    with open(prices_path, encoding="utf-8") as f:
-                        all_prices = json.load(f)
-                    bench_prices = all_prices.get(model_name) or all_prices.get(f"anthropic/{model_name}")
 
-                if bench_prices:
-                    by_comp_costs = {}
-                    by_comp_tokens = {}
-                    total_cost = 0.0
-                    total_tokens = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
-                    for cname, cdata in (bench_data.get("components") or {}).items():
-                        a1 = (cdata.get("A") or {}).get("A1_tokens", {}).get("total", {})
-                        inp = a1.get("input", 0)
-                        out = a1.get("output", 0)
-                        cr = a1.get("cache_read", 0)
-                        cw = a1.get("cache_write", 0)
-                        c = (
-                            inp * (bench_prices.get("input_per_million") or 0) / 1e6
-                            + out * (bench_prices.get("output_per_million") or 0) / 1e6
-                            + cr * (bench_prices.get("cache_read_per_million") or 0) / 1e6
-                            + cw * (bench_prices.get("cache_write_per_million") or 0) / 1e6
-                        )
-                        by_comp_costs[cname] = round(c, 4)
-                        by_comp_tokens[cname] = {"input": inp, "output": out, "cache_read": cr, "cache_write": cw}
-                        total_cost += c
-                        for k in total_tokens:
-                            total_tokens[k] += a1.get(k, 0)
+            # Compute bench A1_tokens cost for metadata / fallback
+            model_name = score.get("model", "")
+            bench_prices = None
+            if prices_path and model_name and os.path.exists(prices_path):
+                with open(prices_path, encoding="utf-8") as f:
+                    all_prices = json.load(f)
+                bench_prices = all_prices.get(model_name) or all_prices.get(f"anthropic/{model_name}")
 
+            if bench_prices:
+                by_comp_costs = {}
+                by_comp_tokens = {}
+                total_cost = 0.0
+                total_tokens = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
+                for cname, cdata in (bench_data.get("components") or {}).items():
+                    a1 = (cdata.get("A") or {}).get("A1_tokens", {}).get("total", {})
+                    inp = a1.get("input", 0)
+                    out = a1.get("output", 0)
+                    cr = a1.get("cache_read", 0)
+                    cw = a1.get("cache_write", 0)
+                    c = (
+                        inp * (bench_prices.get("input_per_million") or 0) / 1e6
+                        + out * (bench_prices.get("output_per_million") or 0) / 1e6
+                        + cr * (bench_prices.get("cache_read_per_million") or 0) / 1e6
+                        + cw * (bench_prices.get("cache_write_per_million") or 0) / 1e6
+                    )
+                    by_comp_costs[cname] = round(c, 4)
+                    by_comp_tokens[cname] = {"input": inp, "output": out, "cache_read": cr, "cache_write": cw}
+                    total_cost += c
+                    for k in total_tokens:
+                        total_tokens[k] += a1.get(k, 0)
+
+                score["bench_tokens"] = {
+                    "total_tokens": total_tokens,
+                    "by_component": by_comp_tokens,
+                }
+
+                # Fallback 2: use bench A1_tokens if transcript cost is missing
+                if "cost" not in score:
                     score["cost"] = {
                         "full_run_usd": round(total_cost, 4),
                         "by_component": by_comp_costs,
                         "source": "bench_tokens",
                     }
-                    score["bench_tokens"] = {
-                        "total_tokens": total_tokens,
-                        "by_component": by_comp_tokens,
-                    }
                     print(f"  Cost from bench tokens × prices: ${total_cost:.2f}")
-                    print(f"  Bench token total: {sum(total_tokens.values()):,}")
+
+            # Fallback 3: use bench C3_cost if nothing else worked
+            if "cost" not in score and bench_c3 is not None:
+                score["cost"] = {
+                    "full_run_usd": round(bench_c3, 3),
+                    "by_component": bench_c3_by_comp,
+                    "source": "bench_cost",
+                }
+                print(f"  Cost from bench C3 (provider-reported, last resort): ${bench_c3:.2f}")
 
             overhead = bench_data.get("pipeline_overhead", {})
             if overhead.get("elapsed_s"):
@@ -365,20 +417,27 @@ def main():
     # ---- 4. Compute GT accuracy ----
     print("\n[4/8] Computing GT accuracy...")
     if gt_dir and os.path.isdir(gt_dir):
-        gt_accuracy = run_script("compute_gt_accuracy.py", [
-            "--run-dir", run_dir, "--gt-dir", gt_dir, "--json"
-        ], label="gt_accuracy")
+        gt_args = ["--run-dir", run_dir, "--gt-dir", gt_dir, "--json"]
+        if args.no_judge:
+            gt_args.append("--no-judge")
+        else:
+            if args.judge_model:
+                gt_args += ["--judge-model", args.judge_model]
+            if args.judge_cache_dir:
+                gt_args += ["--judge-cache-dir", args.judge_cache_dir]
+        gt_accuracy = run_script("compute_gt_accuracy.py", gt_args, label="gt_accuracy")
         if gt_accuracy:
             score["accuracy"] = gt_accuracy
             ec = gt_accuracy.get("endpoint_coverage", {})
             fa = gt_accuracy.get("finding_accuracy", {})
             ex = gt_accuracy.get("exploitation", {})
             if ec.get("has_ground_truth"):
-                print(f"  Endpoints:  TP={ec['tp']}, FP={ec['fp']}, FN={ec['fn']}, "
+                print(f"  Endpoints:  TP={ec['tp']}, Unmatched={ec['unmatched']}, FN={ec['fn']}, "
                       f"F1={ec['f1']}, Recall={ec['recall']}")
             if fa.get("has_ground_truth"):
-                print(f"  Findings:   TP={fa['tp']}, FP={fa['fp']}, FN={fa['fn']}, "
-                      f"F1={fa['f1']}")
+                judge_tag = " (LLM judge)" if fa.get("judge_used") else " (rule-based)"
+                print(f"  Findings:   TP={fa['tp']}, Unmatched={fa['unmatched']}, FN={fa['fn']}, "
+                      f"F1={fa['f1']}{judge_tag}")
             if ex.get("has_ground_truth"):
                 print(f"  Exploits:   rate={ex['exploit_rate']}")
         else:
@@ -435,6 +494,15 @@ def main():
         print(f"  Found {count} finding detail files")
     else:
         print("  No finding detail files found")
+
+    # ---- 6b. Collect advisory HTML for embedding in reports ----
+    print("\n[6b/8] Collecting advisory HTML...")
+    advisory_html = collect_advisory_html(run_dir)
+    if advisory_html:
+        score["advisory_html"] = advisory_html
+        print(f"  Collected {len(advisory_html)} advisory HTML files")
+    else:
+        print("  No advisory HTML files found")
 
     # ---- 7. Extract CWE/CVE/runtime ----
     print("\n[7/8] Extracting CWE/CVE/OWASP...")

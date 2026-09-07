@@ -226,19 +226,19 @@ def _build_model_detail_html(models: list, md: dict) -> str:
             ec = rd.get("endpoint_coverage")
             if ec:
                 missed_list = "".join(f"<li><code>{htmlmod.escape(str(e))}</code></li>" for e in (ec.get("missed") or []))
-                fp_list = "".join(f"<li><code>{htmlmod.escape(str(e))}</code></li>" for e in (ec.get("false_positives") or []))
+                unmatched_list = "".join(f"<li><code>{htmlmod.escape(str(e))}</code></li>" for e in (ec.get("unmatched_endpoints") or []))
                 ep_html = (f'<div class="gt-block"><h5>Endpoint Coverage</h5>'
                     f'<div class="gt-metrics">'
                     f'<span class="gt-tp">TP={ec["tp"]}</span> '
-                    f'<span class="gt-fp">FP={ec["fp"]}</span> '
+                    f'<span class="gt-unmatched">Unmatched={ec["unmatched"]}</span> '
                     f'<span class="gt-fn">FN={ec["fn"]}</span> '
                     f'<span>P={_fmt(ec.get("precision"))}</span> '
                     f'<span>R={_fmt(ec.get("recall"))}</span> '
                     f'<span>F1={_fmt(ec.get("f1"))}</span></div>')
                 if missed_list:
                     ep_html += f'<details><summary>Missed endpoints ({ec["fn"]})</summary><ul class="gt-list">{missed_list}</ul></details>'
-                if fp_list:
-                    ep_html += f'<details><summary>False positives ({ec["fp"]})</summary><ul class="gt-list">{fp_list}</ul></details>'
+                if unmatched_list:
+                    ep_html += f'<details><summary>Unmatched ({ec["unmatched"]})</summary><ul class="gt-list">{unmatched_list}</ul></details>'
                 ep_html += '</div>'
 
             # GT Accuracy — Findings
@@ -249,11 +249,11 @@ def _build_model_detail_html(models: list, md: dict) -> str:
                 for f in (fa.get("tp_findings") or []):
                     label = htmlmod.escape(str(f.get("gt_id", "") or f.get("title", "")))
                     tp_list += f"<li>{label}</li>"
-                fp_list = ""
-                for f in (fa.get("fp_findings") or []):
+                unmatched_list = ""
+                for f in (fa.get("unmatched_findings") or []):
                     t = htmlmod.escape(f.get("title", ""))
                     cwe = f.get("cwe", "")
-                    fp_list += f"<li>CWE-{cwe}: {t}</li>"
+                    unmatched_list += f"<li>CWE-{cwe}: {t}</li>"
                 missed_list = ""
                 for v in (fa.get("missed_vulns") or []):
                     label = htmlmod.escape(str(v.get("id", "") or v.get("title", "")))
@@ -263,15 +263,15 @@ def _build_model_detail_html(models: list, md: dict) -> str:
                 fa_html = (f'<div class="gt-block"><h5>Finding Accuracy (vs Ground Truth)</h5>'
                     f'<div class="gt-metrics">'
                     f'<span class="gt-tp">TP={fa["tp"]}</span> '
-                    f'<span class="gt-fp">FP={fa["fp"]}</span> '
+                    f'<span class="gt-unmatched">Unmatched={fa["unmatched"]}</span> '
                     f'<span class="gt-fn">FN={fa["fn"]}</span> '
                     f'<span>P={_fmt(fa.get("precision"))}</span> '
                     f'<span>R={_fmt(fa.get("recall"))}</span> '
                     f'<span>F1={_fmt(fa.get("f1"))}</span></div>')
                 if tp_list:
                     fa_html += f'<details><summary>True positives ({fa["tp"]})</summary><ul class="gt-list">{tp_list}</ul></details>'
-                if fp_list:
-                    fa_html += f'<details><summary>False positives ({fa["fp"]})</summary><ul class="gt-list">{fp_list}</ul></details>'
+                if unmatched_list:
+                    fa_html += f'<details><summary>Unmatched ({fa["unmatched"]})</summary><ul class="gt-list">{unmatched_list}</ul></details>'
                 if missed_list:
                     fa_html += f'<details><summary>Missed vulnerabilities ({fa["fn"]})</summary><ul class="gt-list">{missed_list}</ul></details>'
                 fa_html += '</div>'
@@ -371,7 +371,7 @@ def _build_model_detail_html(models: list, md: dict) -> str:
         return ""
     return (f'<h2>Per-Model Source Truth Detail</h2>'
             f'<p style="color:var(--muted);font-size:0.82rem;margin-bottom:1rem;">'
-            f'Expandable detail for each model run — GT accuracy TP/FP/FN, missed vulns, '
+            f'Expandable detail for each model run — GT accuracy TP/Unmatched/FN, missed vulns, '
             f'cost breakdown, token usage, dedup analysis, refusals, reliability.</p>'
             f'{sections}')
 
@@ -646,7 +646,7 @@ th {{ font-weight: 600; color: var(--muted); font-size: 0.7rem; text-transform: 
     font-variant-numeric: tabular-nums;
 }}
 .gt-tp {{ color: var(--leading); font-weight: 600; }}
-.gt-fp {{ color: var(--sev-h); font-weight: 600; }}
+.gt-unmatched {{ color: var(--sev-h); font-weight: 600; }}
 .gt-fn {{ color: var(--sev-c); font-weight: 600; }}
 .gt-list {{ padding-left: 1.25rem; font-size: 0.75rem; margin: 0.35rem 0; }}
 .gt-list li {{ margin-bottom: 0.15rem; }}

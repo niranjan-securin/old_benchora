@@ -27,8 +27,8 @@ A self-contained HTML file (no CDN dependencies, embeds Google Fonts only) with:
 
 1. **Header**: Model, target, run ID, generation date. Context: Securin · Application Penetration Testing · AEGIS Programme · Benchmark Round 1
 2. **KPI Strip**: 7 key metrics at a glance
-3. **Endpoint Coverage (Area 1)**: GT vs found, TP/FP/FN with expandable lists of every endpoint, precision/recall/F1 with formula, path normalization rules, 404 filtering, method mismatch credits
-4. **Vulnerability Analysis (Area 4)**: TP/FP/FN with expandable tables showing endpoint, title, CWE, severity, CVSS for each finding. Matching logic explained (path, CWE family, class). OWASP coverage tags
+3. **Endpoint Coverage (Area 1)**: GT vs found, TP/Unmatched/FN with expandable lists of every endpoint, precision/recall/F1 with formula, path normalization rules, 404 filtering, method mismatch credits
+4. **Vulnerability Analysis (Area 4)**: TP/Unmatched/FN with expandable tables showing endpoint, title, CWE, severity, CVSS for each finding. Matching logic explained (path, CWE family, class). OWASP coverage tags
 5. **Exploitation (Area 5)**: GT exploitable, found, reproduced, exploit rate with formula
 6. **Duplicate Analysis**: Pre/post dedup counts, ratio, by-component breakdown
 7. **Refusal Analysis**: Total/guardrail/API/hook counts, guardrail rate formula, by-type and by-component tables, structural failures
@@ -58,7 +58,7 @@ A self-contained HTML file (no CDN dependencies, embeds Google Fonts only) with:
 | 11 | Reproducibility | Computed multi-run | composite |
 
 ### Scoring methodology
-- **GT-based** (Areas 1, 4, 5): compare output to ground truth → TP/FP/FN/precision/recall/F1
+- **GT-based** (Areas 1, 4, 5): compare output to ground truth → TP/Unmatched/FN/precision/recall/F1
 - **Test-case** (Areas 2, 3, 6, 7, 8): user-provided criteria → pass/fail rate (deferred to comparison phase)
 - **Computed** (Areas 9, 10, 11): from run metrics
 

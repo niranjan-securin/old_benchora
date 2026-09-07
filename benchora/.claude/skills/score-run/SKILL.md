@@ -48,9 +48,9 @@ Three GT-based evaluation areas:
 - Compares `crawl_surface.json` found endpoints to `endpoints.json` GT
 - Path normalization: template vars → `{id}`, trailing slashes stripped, hyphens/underscores unified, double slashes collapsed
 - Status-code-aware: 404-only endpoints filtered out
-- Method mismatch handling: when the crawler probes a path with a method not in GT (e.g. OPTIONS/HEAD), and the path exists in GT under a different method: (a) credit the GT entry as TP only if not already matched directly — no false double-crediting; (b) always exclude the probe from FP. Verified against HAR (capture.har) actual HTTP requests.
+- Method mismatch handling: when the crawler probes a path with a method not in GT (e.g. OPTIONS/HEAD), and the path exists in GT under a different method: (a) credit the GT entry as TP only if not already matched directly — no false double-crediting; (b) always exclude the probe from unmatched. Verified against HAR (capture.har) actual HTTP requests.
 - Prefix matching: GT `/static/{path}` matches found `/static/admin/js/theme.js`
-- Output: TP, FP, FN, precision, recall, F1, tp_endpoints list, false_positives list, missed list, method_mismatch_credited (GT entries credited via mismatch), method_mismatch_probes (crawler probes excluded from FP)
+- Output: TP, Unmatched, FN, precision, recall, F1, tp_endpoints list, unmatched_endpoints list, missed list, method_mismatch_credited (GT entries credited via mismatch), method_mismatch_probes (crawler probes excluded from unmatched)
 
 **Area 4 (Vuln Analysis): Finding Accuracy**
 - Compares `scored-findings.jsonl` (or `findings.jsonl`) to `vulns.json` GT
@@ -65,7 +65,7 @@ Three GT-based evaluation areas:
   - crypto: 326/327/328
 - Class matching: case-insensitive substring of vuln_class
 - Fallback: no endpoint on finding → CWE-only match
-- Output: TP, FP, FN, precision, recall, F1, tp_findings list, fp_findings list, missed_vulns list, owasp_breadth, severity_accuracy
+- Output: TP, Unmatched, FN, precision, recall, F1, tp_findings list, unmatched_findings list, missed_vulns list, owasp_breadth, severity_accuracy
 
 **Area 5 (Exploitation): Exploit Rate**
 - Compares `exploits.jsonl` to exploitable GT vulns
