@@ -104,6 +104,12 @@ def compute_reproducibility(run_scores: list[dict]) -> dict:
             keys = {_finding_key(f) for f in findings}
             finding_sets.append(keys)
             finding_counts.append(len(findings))
+        elif score.get("_finding_keys"):
+            # Use embedded finding keys from score_run.py when scored-findings.jsonl
+            # isn't available at _run_dir (e.g. score loaded from a different path)
+            keys = set(score["_finding_keys"])
+            finding_sets.append(keys)
+            finding_counts.append(len(keys))
         else:
             finding_counts.append(_finding_count(score))
 

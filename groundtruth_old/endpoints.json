@@ -1,6 +1,6 @@
 {
-  "target": "medicare-acu.secruin.cloud",
-  "version": 1,
+  "target": "medicare4.secruin.cloud",
+  "version": 2,
   "endpoints": [
     {
       "method": "GET",
@@ -8,8 +8,12 @@
       "url_pattern": "/api/health/",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "Health check endpoint"
+      "roles": [
+        "unauth"
+      ],
+      "description": "Health check endpoint",
+      "parameters": [],
+      "advisories": []
     },
     {
       "method": "GET",
@@ -17,8 +21,12 @@
       "url_pattern": "/api/about/",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "Application info and contact details"
+      "roles": [
+        "unauth"
+      ],
+      "description": "Application info and contact details",
+      "parameters": [],
+      "advisories": []
     },
     {
       "method": "GET",
@@ -26,8 +34,12 @@
       "url_pattern": "/api/doctors/",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "List all doctors"
+      "roles": [
+        "unauth"
+      ],
+      "description": "List all doctors",
+      "parameters": [],
+      "advisories": []
     },
     {
       "method": "POST",
@@ -35,8 +47,26 @@
       "url_pattern": "/api/auth/login/",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "User login with email and password"
+      "roles": [
+        "unauth"
+      ],
+      "description": "User login with email and password",
+      "parameters": [
+        {
+          "name": "email",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "password",
+          "in": "body",
+          "exploited": false
+        }
+      ],
+      "advisories": [
+        "ADV-2026-003",
+        "ADV-2026-011"
+      ]
     },
     {
       "method": "POST",
@@ -44,8 +74,37 @@
       "url_pattern": "/api/auth/signup/",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "Register a new user account"
+      "roles": [
+        "unauth"
+      ],
+      "description": "Register a new user account. Open registration — this is the precondition that makes every 'requires authentication' finding reachable anonymously.",
+      "parameters": [
+        {
+          "name": "email",
+          "in": "body",
+          "exploited": true
+        },
+        {
+          "name": "name",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "password",
+          "in": "body",
+          "exploited": true
+        },
+        {
+          "name": "confirm_password",
+          "in": "body",
+          "exploited": false
+        }
+      ],
+      "advisories": [
+        "ADV-2026-013",
+        "ADV-2026-014",
+        "ADV-2026-011"
+      ]
     },
     {
       "method": "POST",
@@ -53,8 +112,20 @@
       "url_pattern": "/api/auth/forgot-password/",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "Request a password reset email"
+      "roles": [
+        "unauth"
+      ],
+      "description": "Request a password reset email",
+      "parameters": [
+        {
+          "name": "email",
+          "in": "body",
+          "exploited": false
+        }
+      ],
+      "advisories": [
+        "ADV-2026-011"
+      ]
     },
     {
       "method": "POST",
@@ -62,8 +133,32 @@
       "url_pattern": "/api/auth/reset-password/",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "Reset password using a reset token"
+      "roles": [
+        "unauth"
+      ],
+      "description": "Reset password using a reset token",
+      "parameters": [
+        {
+          "name": "token",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "password",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "confirm_password",
+          "in": "body",
+          "exploited": false
+        }
+      ],
+      "advisories": [
+        "ADV-2026-011",
+        "ADV-2026-018",
+        "ADV-2026-013"
+      ]
     },
     {
       "method": "POST",
@@ -71,8 +166,20 @@
       "url_pattern": "/api/auth/logout/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "Logout and blacklist refresh token"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "Logout and blacklist refresh token",
+      "parameters": [
+        {
+          "name": "refresh",
+          "in": "body",
+          "exploited": false
+        }
+      ],
+      "advisories": []
     },
     {
       "method": "GET",
@@ -80,8 +187,14 @@
       "url_pattern": "/api/auth/profile/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "Get current user profile"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "Get current user profile",
+      "parameters": [],
+      "advisories": []
     },
     {
       "method": "PUT",
@@ -89,8 +202,42 @@
       "url_pattern": "/api/auth/profile/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "Update current user profile"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "Update current user profile",
+      "parameters": [
+        {
+          "name": "name",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "phone",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "bio",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "role",
+          "in": "body",
+          "exploited": true
+        },
+        {
+          "name": "is_active",
+          "in": "body",
+          "exploited": true
+        }
+      ],
+      "advisories": [
+        "ADV-2026-001"
+      ]
     },
     {
       "method": "GET",
@@ -98,8 +245,14 @@
       "url_pattern": "/api/dashboard/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "Get dashboard stats (admin sees all, user sees own)"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "Get dashboard stats (admin sees all, user sees own)",
+      "parameters": [],
+      "advisories": []
     },
     {
       "method": "GET",
@@ -107,8 +260,12 @@
       "url_pattern": "/api/admin/users/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin"],
-      "description": "List all users (admin only)"
+      "roles": [
+        "admin"
+      ],
+      "description": "List all users (admin only)",
+      "parameters": [],
+      "advisories": []
     },
     {
       "method": "POST",
@@ -116,8 +273,50 @@
       "url_pattern": "/api/admin/users/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin"],
-      "description": "Create a new user (admin only)"
+      "roles": [
+        "admin"
+      ],
+      "description": "Create a new user (admin only)",
+      "parameters": [
+        {
+          "name": "email",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "password",
+          "in": "body",
+          "exploited": true
+        },
+        {
+          "name": "name",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "phone",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "bio",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "role",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "is_active",
+          "in": "body",
+          "exploited": false
+        }
+      ],
+      "advisories": [
+        "ADV-2026-013"
+      ]
     },
     {
       "method": "DELETE",
@@ -125,8 +324,18 @@
       "url_pattern": "/api/admin/users/{id}/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin"],
-      "description": "Delete a user by ID (admin only)"
+      "roles": [
+        "admin"
+      ],
+      "description": "Delete a user by ID (admin only)",
+      "parameters": [
+        {
+          "name": "user_id",
+          "in": "path",
+          "exploited": false
+        }
+      ],
+      "advisories": []
     },
     {
       "method": "GET",
@@ -134,8 +343,22 @@
       "url_pattern": "/api/patients/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "List patients (admin sees all, user sees own; supports ?sort= param)"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "List patients (admin sees all, user sees own; supports ?sort= param)",
+      "parameters": [
+        {
+          "name": "sort",
+          "in": "query",
+          "exploited": true
+        }
+      ],
+      "advisories": [
+        "ADV-2026-004"
+      ]
     },
     {
       "method": "POST",
@@ -143,8 +366,35 @@
       "url_pattern": "/api/patients/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "Create a new patient record"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "Create a new patient record",
+      "parameters": [
+        {
+          "name": "name",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "dob",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "condition",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "assigned_doctor",
+          "in": "body",
+          "exploited": false
+        }
+      ],
+      "advisories": []
     },
     {
       "method": "GET",
@@ -152,8 +402,22 @@
       "url_pattern": "/api/patients/search/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "Search patients by name (?name= partial match)"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "Search patients by name (?name= partial match)",
+      "parameters": [
+        {
+          "name": "name",
+          "in": "query",
+          "exploited": true
+        }
+      ],
+      "advisories": [
+        "ADV-2026-005"
+      ]
     },
     {
       "method": "GET",
@@ -161,8 +425,22 @@
       "url_pattern": "/api/patients/{id}/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "Get a single patient's full record"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "Get a single patient's full record",
+      "parameters": [
+        {
+          "name": "patient_id",
+          "in": "path",
+          "exploited": true
+        }
+      ],
+      "advisories": [
+        "ADV-2026-006"
+      ]
     },
     {
       "method": "GET",
@@ -170,8 +448,28 @@
       "url_pattern": "/api/patients/{id}/verify-insurance/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "Verify patient insurance via external payer URL (?payer_url=)"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "Verify patient insurance via external payer URL (?payer_url=)",
+      "parameters": [
+        {
+          "name": "patient_id",
+          "in": "path",
+          "exploited": true
+        },
+        {
+          "name": "payer_url",
+          "in": "query",
+          "exploited": true
+        }
+      ],
+      "advisories": [
+        "ADV-2026-008",
+        "ADV-2026-006"
+      ]
     },
     {
       "method": "GET",
@@ -179,8 +477,22 @@
       "url_pattern": "/api/patients/{id}/refill-requests/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "List prescription refill requests for a patient"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "List prescription refill requests for a patient",
+      "parameters": [
+        {
+          "name": "patient_id",
+          "in": "path",
+          "exploited": true
+        }
+      ],
+      "advisories": [
+        "ADV-2026-006"
+      ]
     },
     {
       "method": "POST",
@@ -188,8 +500,48 @@
       "url_pattern": "/api/patients/{id}/refill-requests/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "Create a prescription refill request for a patient"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "Create a prescription refill request for a patient",
+      "parameters": [
+        {
+          "name": "patient_id",
+          "in": "path",
+          "exploited": true
+        },
+        {
+          "name": "medication",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "last_filled",
+          "in": "body",
+          "exploited": true
+        },
+        {
+          "name": "doctor_approved",
+          "in": "body",
+          "exploited": true
+        },
+        {
+          "name": "dosage",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "notes",
+          "in": "body",
+          "exploited": false
+        }
+      ],
+      "advisories": [
+        "ADV-2026-007",
+        "ADV-2026-006"
+      ]
     },
     {
       "method": "GET",
@@ -197,8 +549,22 @@
       "url_pattern": "/api/patients/{id}/lab-results/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "List lab results for a patient"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "List lab results for a patient",
+      "parameters": [
+        {
+          "name": "patient_id",
+          "in": "path",
+          "exploited": true
+        }
+      ],
+      "advisories": [
+        "ADV-2026-006"
+      ]
     },
     {
       "method": "POST",
@@ -206,8 +572,34 @@
       "url_pattern": "/api/patients/{id}/lab-results/",
       "auth": true,
       "auth_required": true,
-      "roles": ["admin", "user", "nurse"],
-      "description": "Upload a lab result file (CSV or XML) for a patient"
+      "roles": [
+        "admin",
+        "user",
+        "nurse"
+      ],
+      "description": "Upload a lab result file (CSV or XML) for a patient",
+      "parameters": [
+        {
+          "name": "patient_id",
+          "in": "path",
+          "exploited": true
+        },
+        {
+          "name": "file",
+          "in": "multipart",
+          "exploited": false
+        },
+        {
+          "name": "filename",
+          "in": "multipart",
+          "exploited": true
+        }
+      ],
+      "advisories": [
+        "ADV-2026-002",
+        "ADV-2026-012",
+        "ADV-2026-006"
+      ]
     },
     {
       "method": "GET",
@@ -215,8 +607,12 @@
       "url_pattern": "/admin/",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "Django admin site"
+      "roles": [
+        "unauth"
+      ],
+      "description": "Django admin site",
+      "parameters": [],
+      "advisories": []
     },
     {
       "method": "GET",
@@ -224,8 +620,12 @@
       "url_pattern": "/admin/login/",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "Django admin login page"
+      "roles": [
+        "unauth"
+      ],
+      "description": "Django admin login page",
+      "parameters": [],
+      "advisories": []
     },
     {
       "method": "POST",
@@ -233,8 +633,90 @@
       "url_pattern": "/admin/login/",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "Django admin login form submit"
+      "roles": [
+        "unauth"
+      ],
+      "description": "Django admin login form submit",
+      "parameters": [
+        {
+          "name": "username",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "password",
+          "in": "body",
+          "exploited": false
+        },
+        {
+          "name": "csrfmiddlewaretoken",
+          "in": "body",
+          "exploited": false
+        }
+      ],
+      "advisories": [
+        "ADV-2026-003"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/auth_app/customuser/",
+      "url_pattern": "/admin/auth_app/customuser/",
+      "auth": true,
+      "auth_required": true,
+      "roles": [
+        "staff"
+      ],
+      "parameters": [
+        {
+          "name": "q",
+          "in": "query",
+          "exploited": false
+        },
+        {
+          "name": "p",
+          "in": "query",
+          "exploited": false
+        },
+        {
+          "name": "o",
+          "in": "query",
+          "exploited": false
+        }
+      ],
+      "advisories": [],
+      "description": "Django admin changelist for CustomUser. add/ change/ delete/ history live under the same prefix. Requires Django staff plus the model permission; the seeded staff account holds neither."
+    },
+    {
+      "method": "GET",
+      "path": "/admin/auth_app/passwordresettoken/",
+      "url_pattern": "/admin/auth_app/passwordresettoken/",
+      "auth": true,
+      "auth_required": true,
+      "roles": [
+        "staff"
+      ],
+      "parameters": [
+        {
+          "name": "q",
+          "in": "query",
+          "exploited": false
+        },
+        {
+          "name": "p",
+          "in": "query",
+          "exploited": false
+        },
+        {
+          "name": "o",
+          "in": "query",
+          "exploited": false
+        }
+      ],
+      "advisories": [
+        "ADV-2026-016"
+      ],
+      "description": "Django admin changelist for PasswordResetToken — renders raw reset token values in list_display. Returned 403 on the live target (staff account holds no model permission), so ADV-2026-016 is not exploitable as deployed."
     },
     {
       "method": "GET",
@@ -242,8 +724,18 @@
       "url_pattern": "/static/{path}",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "Static files (CSS, JS, images)"
+      "roles": [
+        "unauth"
+      ],
+      "description": "Static files (CSS, JS, images)",
+      "parameters": [
+        {
+          "name": "path",
+          "in": "path",
+          "exploited": false
+        }
+      ],
+      "advisories": []
     },
     {
       "method": "GET",
@@ -251,8 +743,21 @@
       "url_pattern": "/media/{path}",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "User-uploaded media files (lab results, etc.)"
+      "roles": [
+        "unauth"
+      ],
+      "description": "User-uploaded media files served with no auth and no Content-Type restriction. Concrete shape observed live: /media/lab_results/<patient_id>/<filename> — routed only while DEBUG=True, serves uploaded .html as text/html from the app origin (ADV-2026-012).",
+      "parameters": [
+        {
+          "name": "path",
+          "in": "path",
+          "exploited": true
+        }
+      ],
+      "advisories": [
+        "ADV-2026-012",
+        "ADV-2026-009"
+      ]
     },
     {
       "method": "GET",
@@ -260,8 +765,32 @@
       "url_pattern": "/{path}",
       "auth": false,
       "auth_required": false,
-      "roles": ["unauth"],
-      "description": "SPA catch-all serving React frontend (index.html)"
+      "roles": [
+        "unauth"
+      ],
+      "description": "SPA catch-all serving React frontend (index.html). Also the wildcard that credits front-end routes during endpoint-coverage scoring.",
+      "parameters": [],
+      "advisories": []
     }
-  ]
+  ],
+  "target_aliases": [
+    "medicare-acu.secruin.cloud",
+    "medicare"
+  ],
+  "sources": [
+    "SAST endpoint inventory — Samuel Joseph, 2026-08-26",
+    "DAST attack surface (29 routes, 53 parameters) — ramesh.gunnam@securin.io, 2026-09-03"
+  ],
+  "endpoint_count": 31,
+  "preconditions": "POST /api/auth/signup/ is unauthenticated and issues a working JWT, so every route marked auth_required is reachable by an anonymous attacker after one request. Treat roles [admin, user, nurse] as 'any authenticated' == 'effectively public' when scoring reachability.",
+  "notes": {
+    "excluded_deliberately": [
+      "GET /media/lab_results/{id}/{file} — the concrete shape observed live. NOT added as a row: the existing GET /media/{path} entry already builds the ('GET','/media') prefix matcher that credits it, whereas a specific row keys to 'GET /media/lab-results/{id}/{id}', which no crawler output normalises to and would be a permanent false negative. Recorded in that row's description instead.",
+      "POST /api/auth/token/refresh/ — returns 404; the route was never registered. The endpoint scorer discards 404-only endpoints, so a row here can never be credited. It is a missing route, not a route, and is recorded in vulns.json as L-04.",
+      "GET /admin/{app}/{model}/ as a template — normalises to 'GET /admin/{id}/{id}' and never matches crawler output. Added as the two concrete model paths instead."
+    ],
+    "roles": "unauth = no token; admin/user/nurse = any authenticated (self-registerable); staff = Django staff flag, additionally gated by per-model permissions.",
+    "parameter_locations": "query | body (JSON) | path | multipart",
+    "exploited_flag": "parameters[].exploited marks the parameter an advisory actually abused."
+  }
 }

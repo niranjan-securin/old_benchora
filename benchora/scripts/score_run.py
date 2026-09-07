@@ -162,6 +162,7 @@ def main():
             score["transcripts"] = transcript_result.get("summary", transcript_result)
             cost_data = transcript_result.get("cost", {})
             if cost_data:
+                cost_data.setdefault("source", "transcript")
                 score["cost"] = cost_data
             elif "cost_usd" in transcript_result:
                 by_comp_costs = {}
@@ -171,9 +172,10 @@ def main():
                 score["cost"] = {
                     "full_run_usd": transcript_result["cost_usd"],
                     "by_component": by_comp_costs,
+                    "source": "transcript",
                 }
             elif "full_run_usd" in transcript_result:
-                score["cost"] = {"full_run_usd": transcript_result["full_run_usd"]}
+                score["cost"] = {"full_run_usd": transcript_result["full_run_usd"], "source": "transcript"}
             model = transcript_result.get("model")
             if model and "model" not in score:
                 score["model"] = model
@@ -209,10 +211,13 @@ def main():
                 score["cost"] = {
                     "full_run_usd": round(total_cost, 3),
                     "by_component": cost_by_comp,
+                    "source": "transcript",
                 }
-                print(f"  Cost computed: ${total_cost:.2f}")
+                print(f"  Cost computed from transcript tokens: ${total_cost:.2f}")
 
     # ---- Override cost/timing from bench folder if available ----
+    # Priority: (1) bench C3_cost per component, (2) bench A1_tokens × model_prices,
+    #           (3) transcript-parsed tokens × model_prices (already computed above)
     bench_results_path = os.path.join(run_dir, "bench", "benchmark_results.json")
     if os.path.exists(bench_results_path):
         try:
@@ -220,6 +225,7 @@ def main():
                 bench_data = json.load(f)
             bench_cost = bench_data.get("overall", {}).get("total_cost")
             if bench_cost is not None:
+                # Priority 1: bench has pre-computed cost (provider-reported)
                 by_comp_costs = {}
                 for cname, cdata in (bench_data.get("components") or {}).items():
                     c3 = (cdata.get("C") or {}).get("C3_cost")
@@ -228,9 +234,55 @@ def main():
                 score["cost"] = {
                     "full_run_usd": round(bench_cost, 3),
                     "by_component": by_comp_costs,
-                    "source": "bench/benchmark_results.json",
+                    "source": "bench_cost",
                 }
-                print(f"  Cost overridden from bench: ${bench_cost:.2f}")
+                print(f"  Cost from bench (provider-reported): ${bench_cost:.2f}")
+            else:
+                # Priority 2: bench has token counts but no cost — compute from
+                # bench A1_tokens × model_prices. Bench tokens are canonical
+                # (include subagent tokens that transcript parsing may miss).
+                model_name = score.get("model", "")
+                bench_prices = None
+                if prices_path and model_name and os.path.exists(prices_path):
+                    with open(prices_path, encoding="utf-8") as f:
+                        all_prices = json.load(f)
+                    bench_prices = all_prices.get(model_name) or all_prices.get(f"anthropic/{model_name}")
+
+                if bench_prices:
+                    by_comp_costs = {}
+                    by_comp_tokens = {}
+                    total_cost = 0.0
+                    total_tokens = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
+                    for cname, cdata in (bench_data.get("components") or {}).items():
+                        a1 = (cdata.get("A") or {}).get("A1_tokens", {}).get("total", {})
+                        inp = a1.get("input", 0)
+                        out = a1.get("output", 0)
+                        cr = a1.get("cache_read", 0)
+                        cw = a1.get("cache_write", 0)
+                        c = (
+                            inp * (bench_prices.get("input_per_million") or 0) / 1e6
+                            + out * (bench_prices.get("output_per_million") or 0) / 1e6
+                            + cr * (bench_prices.get("cache_read_per_million") or 0) / 1e6
+                            + cw * (bench_prices.get("cache_write_per_million") or 0) / 1e6
+                        )
+                        by_comp_costs[cname] = round(c, 4)
+                        by_comp_tokens[cname] = {"input": inp, "output": out, "cache_read": cr, "cache_write": cw}
+                        total_cost += c
+                        for k in total_tokens:
+                            total_tokens[k] += a1.get(k, 0)
+
+                    score["cost"] = {
+                        "full_run_usd": round(total_cost, 4),
+                        "by_component": by_comp_costs,
+                        "source": "bench_tokens",
+                    }
+                    score["bench_tokens"] = {
+                        "total_tokens": total_tokens,
+                        "by_component": by_comp_tokens,
+                    }
+                    print(f"  Cost from bench tokens × prices: ${total_cost:.2f}")
+                    print(f"  Bench token total: {sum(total_tokens.values()):,}")
+
             overhead = bench_data.get("pipeline_overhead", {})
             if overhead.get("elapsed_s"):
                 score["_bench_runtime_ms"] = int(overhead["elapsed_s"] * 1000)
@@ -346,6 +398,29 @@ def main():
             score["duplicates"]["scored_findings_path"] = scored_path
             print(f"  Post-dedup: {dupes.get('post_dedup_count', 0)}, "
                   f"Pre-dedup: {dupes.get('pre_dedup_count', 0)}")
+
+        # Embed finding identity keys for reproducibility (Jaccard) computation
+        # so compare_models.py doesn't need access to the raw scored-findings.jsonl
+        finding_keys = set()
+        with open(scored_path, encoding="utf-8", errors="replace") as _sf:
+            for line in _sf:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    f = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                endpoint = f.get("endpoint") or ""
+                if not endpoint:
+                    aff = f.get("affected_endpoints") or []
+                    if aff:
+                        endpoint = aff[0] if isinstance(aff[0], str) else (aff[0].get("url") or "")
+                cwe = f.get("cwe") or ""
+                vuln_class = f.get("test_type") or f.get("owasp") or f.get("vuln_class") or ""
+                finding_keys.add(f"{endpoint}|{cwe}|{vuln_class}".lower())
+        score["_finding_keys"] = sorted(finding_keys)
+        print(f"  Finding keys for reproducibility: {len(finding_keys)}")
     else:
         print("  Skipped (no scored-findings.jsonl found)")
 

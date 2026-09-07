@@ -1,10 +1,294 @@
 {
   "target": "medicare",
-  "version": 2,
-  "verified_by": "Samuel Joseph",
-  "verified_date": "2026-08-26",
-  "findings_count": 28,
-  "severity_breakdown": {"critical": 5, "high": 8, "medium": 11, "low": 4},
+  "version": 3,
+  "verified_by": "Samuel Joseph (SAST, 2026-08-26); ramesh.gunnam@securin.io (DAST, 2026-09-03)",
+  "verified_date": "2026-09-03",
+  "findings_count": 30,
+  "severity_breakdown": {
+    "critical": 5,
+    "high": 9,
+    "medium": 11,
+    "low": 5
+  },
+  "target_host": "medicare4.secruin.cloud",
+  "target_aliases": [
+    "medicare-acu.secruin.cloud",
+    "medicare4.secruin.cloud"
+  ],
+  "sources": [
+    "SAST source review — Samuel Joseph, 2026-08-26 (28 findings, reproductions vs localhost:18001)",
+    "Authorised DAST — ramesh.gunnam@securin.io, 2026-09-03, http://medicare4.secruin.cloud/ (18 advisories ADV-2026-001..018, 62 test cases TC-001..062)"
+  ],
+  "verification_breakdown": {
+    "confirmed-live": 15,
+    "contradicted-in-part": 1,
+    "not-exploitable-live": 2,
+    "not-tested-live": 5,
+    "partial-live": 1,
+    "source-only": 6
+  },
+  "exploitable_count": 26,
+  "severity_note": "Severity is carried, not adjudicated — it is not a ground-truth concern for this benchmark. `severity` / `cvss_score` hold the SAST ratings and `severity_dast` / `cvss_score_dast` / `cvss_vector_dast` hold what live testing rated; 9 of the 16 live-tested rows differ and NEITHER is promoted over the other. Do not treat `severity_breakdown` as an assessment of the target. `exploitable` IS authoritative and was corrected where live testing disproved the SAST claim: C-05 is now false. Caveat: the 5 rows with verification_status 'not-tested-live' still carry the unverified SAST `exploitable: true`, so `exploitable_count` is an upper bound.",
+  "negative_controls": {
+    "purpose": "Controls that HELD under live testing. A scanner finding that claims one of these is a FALSE POSITIVE, not an unmatched finding. Source: 29 passing cases in the 62-case DAST test matrix.",
+    "controls": [
+      {
+        "test_case": "TC-034",
+        "method": "GET",
+        "endpoint": "/api/patients/search/",
+        "parameter": "name",
+        "claim_that_would_be_false": "sqli",
+        "result": "' OR 1=1-- and variants correctly bound into the LIKE value — not injectable. The injectable parameter on this app is sort on GET /api/patients/ (C-02)."
+      },
+      {
+        "test_case": "TC-061",
+        "method": "ANY",
+        "endpoint": "/*",
+        "parameter": null,
+        "claim_that_would_be_false": "jwt_forgery_via_hardcoded_secret",
+        "result": "HS256 token forged with the published fallback secret rejected (401); a genuine token accepted in the same session as a control. DJANGO_SECRET_KEY is set on this deployment. Bounds C-05 to a latent defect."
+      },
+      {
+        "test_case": "TC-058",
+        "method": "GET",
+        "endpoint": "/admin/auth_app/passwordresettoken/",
+        "parameter": null,
+        "claim_that_would_be_false": "reset_token_disclosure",
+        "result": "403 — the seeded staff account holds no model permissions. Bounds L-05 to not-exploitable."
+      },
+      {
+        "test_case": "TC-026",
+        "method": "GET",
+        "endpoint": "/api/patients/",
+        "parameter": null,
+        "claim_that_would_be_false": "idor|broken_access_control",
+        "result": "2 of 8 records returned to a 2-record account — ownership scoping on the list endpoint is CORRECT. Only patient_search (H-09) and the per-object routes (H-01) are unscoped."
+      },
+      {
+        "test_case": "TC-002",
+        "method": "POST",
+        "endpoint": "/api/auth/login/",
+        "parameter": "email",
+        "claim_that_would_be_false": "user_enumeration",
+        "result": "Unknown email and wrong password both return 401 'Invalid email or password.' — identical. Only signup enumerates (M-05)."
+      },
+      {
+        "test_case": "TC-009,TC-010",
+        "method": "POST",
+        "endpoint": "/api/auth/forgot-password/",
+        "parameter": "email",
+        "claim_that_would_be_false": "user_enumeration",
+        "result": "Known and unknown addresses return an identical generic message."
+      },
+      {
+        "test_case": "TC-017",
+        "method": "POST",
+        "endpoint": "/api/auth/logout/",
+        "parameter": "refresh",
+        "claim_that_would_be_false": "broken_session_termination",
+        "result": "200, refresh-token blacklist applied correctly. Contradicts half of M-01."
+      },
+      {
+        "test_case": "TC-018",
+        "method": "GET",
+        "endpoint": "/api/dashboard/",
+        "parameter": null,
+        "claim_that_would_be_false": "broken_function_level_authorization",
+        "result": "admin sees totals, user sees own — aggregates correctly scoped per role."
+      },
+      {
+        "test_case": "TC-020,TC-025",
+        "method": "GET",
+        "endpoint": "/api/admin/users/",
+        "parameter": null,
+        "claim_that_would_be_false": "missing_authorization",
+        "result": "403 'Admin access required.' for a non-admin token on both list and delete. The in-view role check works; only the MUTATED role field defeats it (TC-021 / C-01)."
+      },
+      {
+        "test_case": "TC-046",
+        "method": "POST",
+        "endpoint": "/api/patients/{id}/refill-requests/",
+        "parameter": "last_filled",
+        "claim_that_would_be_false": "business_logic_always_approves",
+        "result": "A recent last_filled correctly returns status=pending. The bypass is specifically backdating plus doctor_approved (H-02)."
+      },
+      {
+        "test_case": "TC-031",
+        "method": "POST",
+        "endpoint": "/api/patients/",
+        "parameter": null,
+        "claim_that_would_be_false": "missing_ownership_on_create",
+        "result": "201 with created_by recorded correctly — write-side ownership is sound."
+      },
+      {
+        "test_case": "TC-060",
+        "method": "ANY",
+        "endpoint": "/*",
+        "parameter": null,
+        "claim_that_would_be_false": "missing_xfo|missing_nosniff|missing_referrer_policy",
+        "result": "X-Frame-Options, X-Content-Type-Options and Referrer-Policy ARE present as framework defaults. Only HSTS, CSP and Permissions-Policy are missing (M-07)."
+      },
+      {
+        "test_case": "TC-008",
+        "method": "POST",
+        "endpoint": "/api/auth/signup/",
+        "parameter": "confirm_password",
+        "claim_that_would_be_false": "missing_input_validation",
+        "result": "400 on password/confirm_password mismatch."
+      },
+      {
+        "test_case": "TC-011",
+        "method": "POST",
+        "endpoint": "/api/auth/reset-password/",
+        "parameter": "token",
+        "claim_that_would_be_false": "reset_token_not_validated",
+        "result": "400 'Invalid or expired reset token.' for a well-formed but unknown UUID. Note: a MALFORMED token is a different code path and is untested — see H-04."
+      },
+      {
+        "test_case": "TC-038",
+        "method": "GET",
+        "endpoint": "/api/patients/{id}/verify-insurance/",
+        "parameter": "payer_url",
+        "claim_that_would_be_false": "missing_input_validation",
+        "result": "400 'payer_url is required.' when the parameter is omitted."
+      },
+      {
+        "test_case": "TC-047",
+        "method": "POST",
+        "endpoint": "/api/patients/{id}/refill-requests/",
+        "parameter": "medication",
+        "claim_that_would_be_false": "missing_input_validation",
+        "result": "400 when the required field is omitted."
+      },
+      {
+        "test_case": "TC-056",
+        "method": "GET",
+        "endpoint": "/api/health/ /api/about/ /api/doctors/",
+        "parameter": null,
+        "claim_that_would_be_false": "information_disclosure",
+        "result": "200 with static, non-sensitive content only."
+      }
+    ],
+    "additional_passing_cases": [
+      "TC-001",
+      "TC-005",
+      "TC-013",
+      "TC-014",
+      "TC-019",
+      "TC-022",
+      "TC-027",
+      "TC-032",
+      "TC-036",
+      "TC-042",
+      "TC-049"
+    ]
+  },
+  "not_tested": {
+    "purpose": "Neither confirmed nor refuted by the DAST run. Must not be scored as a true positive OR a false positive.",
+    "items": [
+      {
+        "test_case": "TC-012",
+        "area": "session revocation after password reset",
+        "endpoint": "/api/auth/reset-password/",
+        "related": [
+          "M-01",
+          "M-08"
+        ],
+        "reason": "Needs the emailed token; the mailpit sink was unreachable from the testing position."
+      },
+      {
+        "test_case": "TC-024",
+        "area": "admin self-deletion guard",
+        "endpoint": "/api/admin/users/{id}/",
+        "related": [],
+        "reason": "Not executed — destructive on a shared environment. The guard is confirmed in source."
+      },
+      {
+        "test_case": "TC-041",
+        "area": "non-HTTP schemes on payer_url (file://, gopher://)",
+        "endpoint": "/api/patients/{id}/verify-insurance/",
+        "related": [
+          "C-04"
+        ],
+        "reason": "Not reached before the endpoint's upstream throttle engaged."
+      },
+      {
+        "test_case": "TC-053",
+        "area": "XXE on the XML lab-import branch",
+        "endpoint": "/api/patients/{id}/lab-results/",
+        "related": [],
+        "reason": "Not executed. Source indicates defusedxml so it is expected to be blocked, but expectation is not evidence. NOTE: there is no XXE row anywhere in this ground truth — the XML upload branch is currently unrepresented."
+      },
+      {
+        "test_case": "TC-040",
+        "area": "SSRF against loopback and cloud metadata",
+        "endpoint": "/api/patients/{id}/verify-insurance/",
+        "related": [
+          "C-04"
+        ],
+        "status": "inconclusive",
+        "reason": "Empty-body 401 from an upstream edge control, not the application's own denylist (which returns 400 with a JSON body); the same 401 later appeared for a URL that had already succeeded. Recorded as unproven rather than as either a pass or a finding."
+      }
+    ]
+  },
+  "exploit_chains": [
+    {
+      "id": "CHAIN-01",
+      "title": "Anonymous to root in six requests",
+      "note": "These findings compose. Registration is open, so every 'requires authentication' precondition is one unauthenticated request away. Steps 1-3 need nothing but curl. Step 5 was deliberately not executed.",
+      "steps": [
+        {
+          "step": 0,
+          "request": "POST /api/auth/signup/",
+          "result": "valid JWT (open registration)",
+          "gt_id": null,
+          "advisory_id": null
+        },
+        {
+          "step": 1,
+          "request": "POST /api/auth/login/ with seeded credentials",
+          "result": "admin token without any exploitation at all",
+          "gt_id": "H-07",
+          "advisory_id": "ADV-2026-003"
+        },
+        {
+          "step": 2,
+          "request": "PUT /api/auth/profile/ {\"role\":\"admin\"}",
+          "result": "application administrator on the existing token",
+          "gt_id": "C-01",
+          "advisory_id": "ADV-2026-001"
+        },
+        {
+          "step": 3,
+          "request": "GET /api/patients/search/",
+          "result": "all 8 patient records, full PHI",
+          "gt_id": "H-09",
+          "advisory_id": "ADV-2026-005"
+        },
+        {
+          "step": 4,
+          "request": "POST /api/patients/3/lab-results/ filename=/app/backend/...",
+          "result": "arbitrary file write as root",
+          "gt_id": "C-03",
+          "advisory_id": "ADV-2026-002"
+        },
+        {
+          "step": 5,
+          "request": "(passive) runserver StatReloader executes the written file",
+          "result": "remote code execution — NOT EXECUTED BY CHOICE",
+          "gt_id": "M-06",
+          "advisory_id": "ADV-2026-010"
+        },
+        {
+          "step": 6,
+          "request": "GET /api/patients/3/verify-insurance/?payer_url=...",
+          "result": "outbound fetch with 800-byte response reflection",
+          "gt_id": "C-04",
+          "advisory_id": "ADV-2026-008"
+        }
+      ]
+    }
+  ],
   "vulnerabilities": [
     {
       "id": "C-01",
@@ -12,7 +296,10 @@
       "severity": "Critical",
       "cvss_score": 9.8,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
-      "cwe": ["CWE-915", "CWE-269"],
+      "cwe": [
+        "CWE-915",
+        "CWE-269"
+      ],
       "cwe_primary": "CWE-915",
       "vuln_class": "mass_assignment",
       "owasp": "A01:2021",
@@ -34,7 +321,20 @@
         ],
         "curl": "curl -s -X PUT http://localhost:18001/api/auth/profile/ -H \"Authorization: Bearer $TOK\" -H 'Content-Type: application/json' -d '{\"name\":\"Regular User\",\"role\":\"admin\"}'"
       },
-      "remediation": "Drop 'role' and 'is_active' from _USER_EDITABLE_FIELDS. Re-add 'role' to UserProfileSerializer.read_only_fields."
+      "remediation": "Drop 'role' and 'is_active' from _USER_EDITABLE_FIELDS. Re-add 'role' to UserProfileSerializer.read_only_fields.",
+      "advisory_id": "ADV-2026-001",
+      "source_finding": "MC-02",
+      "verification_status": "confirmed-live",
+      "severity_dast": "Critical",
+      "cvss_score_dast": 8.8,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+      "parameter": "role",
+      "test_cases": [
+        "TC-015",
+        "TC-016",
+        "TC-021"
+      ],
+      "chain_step": 2
     },
     {
       "id": "C-02",
@@ -42,7 +342,9 @@
       "severity": "Critical",
       "cvss_score": 9.8,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
-      "cwe": ["CWE-89"],
+      "cwe": [
+        "CWE-89"
+      ],
       "cwe_primary": "CWE-89",
       "vuln_class": "sqli",
       "owasp": "A03:2021",
@@ -63,7 +365,21 @@
         ],
         "curl": "curl -s -G -H \"Authorization: Bearer $TOK\" --data-urlencode \"sort=(CASE WHEN (SELECT substr(password,1,1) FROM auth_app_customuser WHERE email='admin@app.local')='p' THEN name ELSE condition END)\" http://localhost:18001/api/patients/"
       },
-      "remediation": "Replace raw SQL ORDER BY with a server-side allowlist mapping sort values to safe SQL expressions. Prefer ORM qs.order_by()."
+      "remediation": "Replace raw SQL ORDER BY with a server-side allowlist mapping sort values to safe SQL expressions. Prefer ORM qs.order_by().",
+      "advisory_id": "ADV-2026-004",
+      "source_finding": "MC-04",
+      "verification_status": "confirmed-live",
+      "severity_dast": "High",
+      "cvss_score_dast": 6.5,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+      "parameter": "sort",
+      "test_cases": [
+        "TC-027",
+        "TC-028",
+        "TC-029",
+        "TC-030"
+      ],
+      "verification_note": "Boolean-based blind extraction recovered the genuine pbkdf2_sha256$ hash prefix and a row count of 5 from auth_app_customuser. DAST rated 6.5 (C:H/I:N/A:N) rather than 9.8 — read-only ORDER BY injection, no write or RCE path."
     },
     {
       "id": "C-03",
@@ -71,7 +387,10 @@
       "severity": "Critical",
       "cvss_score": 9.8,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
-      "cwe": ["CWE-22", "CWE-434"],
+      "cwe": [
+        "CWE-22",
+        "CWE-434"
+      ],
       "cwe_primary": "CWE-22",
       "vuln_class": "path_traversal",
       "owasp": "A01:2021",
@@ -92,7 +411,21 @@
         ],
         "curl": "curl -s -X POST -H \"Authorization: Bearer $TOK\" -F 'file=@/tmp/pwn.csv;filename=labs.csv' -F 'filename=../../pwn-traversal.txt' http://localhost:18001/api/patients/3/lab-results/"
       },
-      "remediation": "Validate filename against a safe pattern (^[A-Za-z0-9._-]{1,128}$). After joining, verify with os.path.realpath that it remains under the base directory."
+      "remediation": "Validate filename against a safe pattern (^[A-Za-z0-9._-]{1,128}$). After joining, verify with os.path.realpath that it remains under the base directory.",
+      "advisory_id": "ADV-2026-002",
+      "source_finding": "MC-01",
+      "verification_status": "confirmed-live",
+      "severity_dast": "Critical",
+      "cvss_score_dast": 9.2,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+      "parameter": "filename",
+      "test_cases": [
+        "TC-049",
+        "TC-050",
+        "TC-051"
+      ],
+      "chain_step": 4,
+      "verification_note": "Write primitive proven at /tmp and /app/backend via both absolute-path and relative traversal. RCE via runserver autoreload deliberately not executed. CWE-94 is the chain target; CWE-434 belongs to H-05/ADV-2026-012."
     },
     {
       "id": "C-04",
@@ -100,7 +433,9 @@
       "severity": "Critical",
       "cvss_score": 9.1,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:L/A:N",
-      "cwe": ["CWE-918"],
+      "cwe": [
+        "CWE-918"
+      ],
       "cwe_primary": "CWE-918",
       "vuln_class": "ssrf",
       "owasp": "A10:2021",
@@ -121,7 +456,22 @@
         ],
         "curl": "curl -s -H \"Authorization: Bearer $TOK\" \"http://localhost:18001/api/patients/1/verify-insurance/?payer_url=http://127.1:8001/api/health/\""
       },
-      "remediation": "Replace blocklist with allowlist of approved payer hostnames. Resolve DNS and verify IP is not loopback/private/link-local before fetching. Pin resolved IP to prevent DNS rebinding."
+      "remediation": "Replace blocklist with allowlist of approved payer hostnames. Resolve DNS and verify IP is not loopback/private/link-local before fetching. Pin resolved IP to prevent DNS rebinding.",
+      "advisory_id": "ADV-2026-008",
+      "source_finding": "MC-03",
+      "verification_status": "partial-live",
+      "severity_dast": "High",
+      "cvss_score_dast": 7.9,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:L/A:N",
+      "parameter": "payer_url",
+      "test_cases": [
+        "TC-038",
+        "TC-039",
+        "TC-040",
+        "TC-041"
+      ],
+      "chain_step": 6,
+      "verification_note": "Arbitrary outbound fetch with 800-byte response reflection confirmed against example.com. Loopback and 169.254.169.254 returned an empty-body 401 from an UPSTREAM EDGE CONTROL, not the app denylist (which returns 400 + JSON) — internal-target reachability is UNPROVEN. The 'blocklist bypass' claim in the title is not evidenced; retest from inside the perimeter."
     },
     {
       "id": "C-05",
@@ -129,16 +479,19 @@
       "severity": "Critical",
       "cvss_score": 9.8,
       "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
-      "cwe": ["CWE-798", "CWE-321"],
+      "cwe": [
+        "CWE-798",
+        "CWE-1188"
+      ],
       "cwe_primary": "CWE-798",
-      "vuln_class": "hardcoded_credentials",
+      "vuln_class": "hardcoded_secret",
       "owasp": "A02:2021",
       "method": "ANY",
       "endpoint": "/*",
-      "exploitable": true,
-      "best_verification": "verified-poc",
+      "exploitable": false,
+      "best_verification": "verified-config",
       "affected_component": "medicare/settings.py:7",
-      "affected_endpoint": "All endpoints (JWT authentication bypass)",
+      "affected_endpoint": "All endpoints (JWT signing key)",
       "auth_required": false,
       "description": "SECRET_KEY defaults to 'medicare-portal-dev-secret-2024' when DJANGO_SECRET_KEY env var not set. SimpleJWT uses SECRET_KEY as SIGNING_KEY with HS256. Anyone who knows the key can mint valid access tokens for any user_id without login.",
       "impact": "Unauthenticated remote takeover. Forged user_id=1 token grants full admin access to every endpoint, patient record, lab artifact, and refill row.",
@@ -149,15 +502,29 @@
         ],
         "curl": "python3 -c \"import jwt,time; print(jwt.encode({'token_type':'access','exp':int(time.time())+3600,'iat':int(time.time()),'jti':'forged','user_id':1},'medicare-portal-dev-secret-2024',algorithm='HS256'))\" | xargs -I{} curl -s -H 'Authorization: Bearer {}' http://localhost:18001/api/admin/users/"
       },
-      "remediation": "Fail-closed: use os.environ['DJANGO_SECRET_KEY'] (raises KeyError if missing). Set SIMPLE_JWT SIGNING_KEY to a dedicated env var."
+      "remediation": "Fail-closed: use os.environ['DJANGO_SECRET_KEY'] (raises KeyError if missing). Set SIMPLE_JWT SIGNING_KEY to a dedicated env var.",
+      "advisory_id": "ADV-2026-017",
+      "source_finding": "SRV-01",
+      "verification_status": "not-exploitable-live",
+      "severity_dast": "Low",
+      "cvss_score_dast": null,
+      "cvss_score_if_reachable": 9.8,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H (only if reachable)",
+      "test_cases": [
+        "TC-061"
+      ],
+      "verification_note": "DISPROVED ON TARGET. A token forged with the published fallback secret was rejected (401) while a genuine token was accepted in the same session as a control — the deployment sets DJANGO_SECRET_KEY. The insecure default remains in source and fails open, so this stays as a latent code defect at Low. Re-keyed from vuln_class hardcoded_credentials/CWE-798 to hardcoded_secret/CWE-1188 to clear a scorer-key collision with H-07 (README.md section 6.1)."
     },
     {
       "id": "H-01",
-      "title": "Broken object-level authorization (IDOR/BOLA) on 5 patient endpoints",
+      "title": "Broken object-level authorization (IDOR/BOLA) on 6 per-object patient endpoints",
       "severity": "High",
       "cvss_score": 8.2,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:L/A:N",
-      "cwe": ["CWE-639", "CWE-862"],
+      "cwe": [
+        "CWE-639",
+        "CWE-862"
+      ],
       "cwe_primary": "CWE-639",
       "vuln_class": "idor",
       "owasp": "A01:2021",
@@ -166,9 +533,9 @@
       "exploitable": true,
       "best_verification": "verified-poc",
       "affected_component": "patients/views.py:85,106 ; refill_views.py:37 ; lab_import_views.py:61 ; insurance_views.py:29",
-      "affected_endpoint": "GET /api/patients/{id}/, GET /api/patients/search/, GET|POST /api/patients/{id}/refill-requests/, GET|POST /api/patients/{id}/lab-results/, GET /api/patients/{id}/verify-insurance/",
+      "affected_endpoint": "GET /api/patients/{id}/, GET /api/patients/{id}/verify-insurance/, GET|POST /api/patients/{id}/refill-requests/, GET|POST /api/patients/{id}/lab-results/",
       "auth_required": true,
-      "description": "Only patients_list_create filters by created_by. Every other patient-scoped endpoint fetches by primary key with no ownership check: patient detail, patient search (no filter at all — empty ?name= returns entire table), refill requests, lab results, and insurance verification. A newly signed-up account enumerates all patient records via /api/patients/search/?name= with empty parameter.",
+      "description": "Six per-object patient endpoints fetch by primary key with no ownership check: patient detail, insurance verification, refill requests (read and write) and lab results (read and write). A newly signed-up account reads and writes records belonging to other users by incrementing the path id. GET /api/patients/ (the list) IS correctly scoped by created_by and is not part of this finding. The unscoped patient SEARCH endpoint is tracked separately as H-09 / ADV-2026-005 — missing authorization on a collection (CWE-862) rather than authorization bypass through a user-controlled key (CWE-639).",
       "impact": "PHI disclosure for entire patient population (name, DOB, condition, doctor, refill history, lab results). Direct HIPAA 164.312(a)(1) failure.",
       "reproduction": {
         "steps": [
@@ -179,7 +546,21 @@
         ],
         "curl": "curl -s -H \"Authorization: Bearer $TOK\" http://localhost:18001/api/patients/1/"
       },
-      "remediation": "Apply ownership check on all patient-scoped endpoints: if request.user.role != 'admin' and patient.created_by_id != request.user.id, return 403."
+      "remediation": "Apply ownership check on all patient-scoped endpoints: if request.user.role != 'admin' and patient.created_by_id != request.user.id, return 403.",
+      "advisory_id": "ADV-2026-006",
+      "source_finding": "MC-05",
+      "verification_status": "confirmed-live",
+      "severity_dast": "High",
+      "cvss_score_dast": 7.1,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:L/A:N",
+      "parameter": "patient_id",
+      "test_cases": [
+        "TC-036",
+        "TC-037",
+        "TC-043",
+        "TC-048"
+      ],
+      "verification_note": "Read confirmed across non-owned records; write confirmed by creating an approved refill on another user's patient. The search endpoint was split out to H-09/ADV-2026-005 — different CWE (862 vs 639), different fix. GET /api/patients/ (list) is correctly scoped and is NOT part of this finding (TC-026 pass)."
     },
     {
       "id": "H-02",
@@ -187,7 +568,11 @@
       "severity": "High",
       "cvss_score": 8.1,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:H/A:H",
-      "cwe": ["CWE-602", "CWE-840", "CWE-863"],
+      "cwe": [
+        "CWE-602",
+        "CWE-840",
+        "CWE-863"
+      ],
       "cwe_primary": "CWE-602",
       "vuln_class": "business_logic",
       "owasp": "A04:2021",
@@ -208,7 +593,21 @@
         ],
         "curl": "curl -s -X POST -H \"Authorization: Bearer $TOK\" -H 'Content-Type: application/json' http://localhost:18001/api/patients/3/refill-requests/ -d '{\"medication\":\"oxycodone-10mg\",\"dosage\":\"30 tablets\",\"last_filled\":\"2024-01-01\",\"doctor_approved\":false}'"
       },
-      "remediation": "Compute days_since_last_fill from the most recent PrescriptionRefill row, not client-supplied date. Remove doctor_approved from client-accepted fields."
+      "remediation": "Compute days_since_last_fill from the most recent PrescriptionRefill row, not client-supplied date. Remove doctor_approved from client-accepted fields.",
+      "advisory_id": "ADV-2026-007",
+      "source_finding": "MC-07",
+      "verification_status": "confirmed-live",
+      "severity_dast": "High",
+      "cvss_score_dast": 6.5,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+      "parameter": "doctor_approved,last_filled",
+      "test_cases": [
+        "TC-044",
+        "TC-045",
+        "TC-046",
+        "TC-047"
+      ],
+      "verification_note": "Both bypass paths exploited. TC-046 is the isolating control: a recent last_filled correctly returns status=pending."
     },
     {
       "id": "H-03",
@@ -216,7 +615,10 @@
       "severity": "High",
       "cvss_score": 7.5,
       "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-      "cwe": ["CWE-489", "CWE-215"],
+      "cwe": [
+        "CWE-489",
+        "CWE-215"
+      ],
       "cwe_primary": "CWE-489",
       "vuln_class": "information_disclosure",
       "owasp": "A05:2021",
@@ -236,7 +638,17 @@
         ],
         "curl": "curl -s http://localhost:18001/api/nonexistent/"
       },
-      "remediation": "Set DEBUG default to false: DEBUG = os.environ.get('DJANGO_DEBUG', 'false').lower() == 'true'."
+      "remediation": "Set DEBUG default to false: DEBUG = os.environ.get('DJANGO_DEBUG', 'false').lower() == 'true'.",
+      "advisory_id": "ADV-2026-009",
+      "source_finding": "SRV-03",
+      "verification_status": "confirmed-live",
+      "severity_dast": "High",
+      "cvss_score_dast": 7.5,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "test_cases": [
+        "TC-059"
+      ],
+      "verification_note": "Unauthenticated request to an unknown /api/ route returns Django's technical 404 with the URL resolver tree. Also gates the /media/ route that delivers H-05/ADV-2026-012."
     },
     {
       "id": "H-04",
@@ -244,7 +656,10 @@
       "severity": "High",
       "cvss_score": 7.5,
       "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-      "cwe": ["CWE-248", "CWE-209"],
+      "cwe": [
+        "CWE-248",
+        "CWE-209"
+      ],
       "cwe_primary": "CWE-248",
       "vuln_class": "information_disclosure",
       "owasp": "A05:2021",
@@ -264,7 +679,14 @@
         ],
         "curl": "curl -s -X POST http://localhost:18001/api/auth/reset-password/ -H 'Content-Type: application/json' -d '{\"token\":\"x\",\"password\":\"aaaaaa\",\"confirm_password\":\"aaaaaa\"}'"
       },
-      "remediation": "Add django.core.exceptions.ValidationError to the except clause."
+      "remediation": "Add django.core.exceptions.ValidationError to the except clause.",
+      "advisory_id": null,
+      "source_finding": null,
+      "verification_status": "not-tested-live",
+      "test_cases": [
+        "TC-011"
+      ],
+      "verification_note": "NOT REFUTED, NOT CONFIRMED. TC-011 passed (400) but sent a well-formed UUID (00000000-...), which hits PasswordResetToken.DoesNotExist and IS caught. This finding needs a MALFORMED token (e.g. \"x\") so UUIDField.to_python raises django.core.exceptions.ValidationError, which the except clause does not catch. That case was never sent. Retest."
     },
     {
       "id": "H-05",
@@ -272,7 +694,10 @@
       "severity": "High",
       "cvss_score": 8.1,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:R/S:C/C:H/I:L/A:N",
-      "cwe": ["CWE-434", "CWE-79"],
+      "cwe": [
+        "CWE-434",
+        "CWE-79"
+      ],
       "cwe_primary": "CWE-434",
       "vuln_class": "unrestricted_upload",
       "owasp": "A03:2021",
@@ -293,7 +718,20 @@
         ],
         "curl": "curl -s -X POST -H \"Authorization: Bearer $TOK\" -F 'file=@evil.html' http://localhost:18001/api/patients/1/lab-results/"
       },
-      "remediation": "Validate file extension against allowlist (csv, pdf, hl7, txt). Check magic bytes. Serve uploaded files with Content-Disposition: attachment and X-Content-Type-Options: nosniff."
+      "remediation": "Validate file extension against allowlist (csv, pdf, hl7, txt). Check magic bytes. Serve uploaded files with Content-Disposition: attachment and X-Content-Type-Options: nosniff.",
+      "advisory_id": "ADV-2026-012",
+      "source_finding": "MC-08",
+      "verification_status": "confirmed-live",
+      "severity_dast": "Medium",
+      "cvss_score_dast": 5.4,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:C/C:L/I:L/A:N",
+      "parameter": "filename",
+      "test_cases": [
+        "TC-052",
+        "TC-054",
+        "TC-055"
+      ],
+      "verification_note": "Uploaded .html served as text/html from the app origin and retrievable with no token. DAST rated Medium on UI:R (a victim must open the link) rather than GT's High."
     },
     {
       "id": "H-06",
@@ -301,7 +739,10 @@
       "severity": "High",
       "cvss_score": 7.5,
       "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-      "cwe": ["CWE-307", "CWE-799"],
+      "cwe": [
+        "CWE-307",
+        "CWE-799"
+      ],
       "cwe_primary": "CWE-307",
       "vuln_class": "brute_force",
       "owasp": "A07:2021",
@@ -321,7 +762,17 @@
         ],
         "curl": "for i in $(seq 1 100); do curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:18001/api/auth/login/ -H 'Content-Type: application/json' -d '{\"email\":\"admin@app.local\",\"password\":\"wrong'$i'\"}'; done"
       },
-      "remediation": "Add DRF throttling via DEFAULT_THROTTLE_CLASSES (5/min for login). Use django-axes for account lockout."
+      "remediation": "Add DRF throttling via DEFAULT_THROTTLE_CLASSES (5/min for login). Use django-axes for account lockout.",
+      "advisory_id": "ADV-2026-011",
+      "source_finding": "MC-09",
+      "verification_status": "confirmed-live",
+      "severity_dast": "Medium",
+      "cvss_score_dast": 5.3,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+      "test_cases": [
+        "TC-003"
+      ],
+      "verification_note": "Twenty consecutive failed logins returned 401 with no throttle and valid credentials were accepted immediately after. No 429 at any point. Applies to login, signup, forgot-password and reset-password."
     },
     {
       "id": "H-07",
@@ -329,7 +780,10 @@
       "severity": "High",
       "cvss_score": 7.5,
       "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-      "cwe": ["CWE-798", "CWE-1392"],
+      "cwe": [
+        "CWE-798",
+        "CWE-1392"
+      ],
       "cwe_primary": "CWE-798",
       "vuln_class": "hardcoded_credentials",
       "owasp": "A07:2021",
@@ -349,7 +803,20 @@
         ],
         "curl": "curl -s -X POST http://localhost:18001/api/auth/login/ -H 'Content-Type: application/json' -d '{\"email\":\"admin@app.local\",\"password\":\"Admin@123\"}'"
       },
-      "remediation": "Remove credential display from Login.jsx. Generate random passwords in seed.py, print only to container logs on first run."
+      "remediation": "Remove credential display from Login.jsx. Generate random passwords in seed.py, print only to container logs on first run.",
+      "advisory_id": "ADV-2026-003",
+      "source_finding": "SRV-02",
+      "verification_status": "confirmed-live",
+      "severity_dast": "Critical",
+      "cvss_score_dast": 9.8,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+      "test_cases": [
+        "TC-001",
+        "TC-004",
+        "TC-057"
+      ],
+      "chain_step": 1,
+      "verification_note": "All three seeded accounts authenticate; admin@app.local also grants the Django admin panel. The seed script recreates deleted accounts on every restart. DAST rated Critical (PR:N, pre-auth) against GT's High."
     },
     {
       "id": "H-08",
@@ -357,7 +824,9 @@
       "severity": "High",
       "cvss_score": 7.5,
       "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
-      "cwe": ["CWE-521"],
+      "cwe": [
+        "CWE-521"
+      ],
       "cwe_primary": "CWE-521",
       "vuln_class": "weak_password",
       "owasp": "A07:2021",
@@ -377,7 +846,66 @@
         ],
         "curl": "curl -s -X POST http://localhost:18001/api/auth/signup/ -H 'Content-Type: application/json' -d '{\"email\":\"weak@test.com\",\"name\":\"test\",\"password\":\"123456\",\"confirm_password\":\"123456\"}'"
       },
-      "remediation": "Restore Django default AUTH_PASSWORD_VALIDATORS: MinimumLengthValidator (8+), CommonPasswordValidator, NumericPasswordValidator, UserAttributeSimilarityValidator."
+      "remediation": "Restore Django default AUTH_PASSWORD_VALIDATORS: MinimumLengthValidator (8+), CommonPasswordValidator, NumericPasswordValidator, UserAttributeSimilarityValidator.",
+      "advisory_id": "ADV-2026-013",
+      "source_finding": "MC-10",
+      "verification_status": "confirmed-live",
+      "severity_dast": "Medium",
+      "cvss_score_dast": 5.3,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+      "parameter": "password",
+      "test_cases": [
+        "TC-007",
+        "TC-023"
+      ],
+      "verification_note": "Registration with password 123456 returned 201 and a working JWT. Same missing validators on admin user-create and reset-password."
+    },
+    {
+      "id": "H-09",
+      "title": "Patient search returns every record regardless of ownership",
+      "severity": "High",
+      "cvss_score": 6.5,
+      "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+      "cwe": [
+        "CWE-862",
+        "CWE-200"
+      ],
+      "cwe_primary": "CWE-862",
+      "vuln_class": "broken_access_control",
+      "owasp": "A01:2021",
+      "method": "GET",
+      "endpoint": "/api/patients/search/",
+      "parameter": "name",
+      "exploitable": true,
+      "best_verification": "verified-poc",
+      "affected_component": "patients_app/views.py (patient_search) — raw SELECT * with a LIKE filter and no created_by scoping",
+      "affected_endpoint": "GET /api/patients/search/",
+      "auth_required": true,
+      "advisory_id": "ADV-2026-005",
+      "source_finding": "MC-06",
+      "verification_status": "confirmed-live",
+      "severity_dast": "High",
+      "cvss_score_dast": 6.5,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+      "test_cases": [
+        "TC-032",
+        "TC-033",
+        "TC-034",
+        "TC-035"
+      ],
+      "chain_step": 3,
+      "description": "patient_search applies no ownership filter at all, and the name parameter is optional — omitting it yields LIKE '%%', which matches every row. Distinct from H-01/ADV-2026-006: this is missing authorization (CWE-862) on a collection endpoint, not authorization bypass through a user-controlled object key (CWE-639). The query also uses SELECT *, so raw columns outside the serializer — notably created_by_id — are returned to the caller. The name value itself is correctly parameterised and is NOT SQL-injectable (TC-034 pass); the injectable parameter on this app is sort on GET /api/patients/ (C-02).",
+      "impact": "Any authenticated account — and registration is open, so any anonymous user one request away — retrieves the complete patient table: names, dates of birth, diagnoses and assigned physicians. Confirmed live: a single parameterless request returned all 8 records to an account that owned 2. Step 3 of the anonymous-to-root chain, and a reportable PHI breach path under HIPAA.",
+      "reproduction": {
+        "steps": [
+          "POST /api/auth/signup/ to obtain a JWT (open registration)",
+          "GET /api/patients/ with that token — returns only the 2 records the account owns (correct scoping, TC-026)",
+          "GET /api/patients/search/ with NO query parameters at all",
+          "Response is all 8 patient records, each including a raw created_by_id field"
+        ],
+        "curl": "curl -s -H \"Authorization: Bearer $TOK\" http://medicare4.secruin.cloud/api/patients/search/"
+      },
+      "remediation": "Scope the queryset to request.user (created_by=request.user) unless the caller holds the admin role, checked against request.user.role. Make name required, or return 400 when it is absent instead of falling through to LIKE '%%'. Replace SELECT * with the serializer's explicit field list so created_by_id stops leaking. Apply the same scoping to every collection endpoint, not just this one."
     },
     {
       "id": "M-01",
@@ -385,7 +913,10 @@
       "severity": "Medium",
       "cvss_score": 6.5,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:L/A:N",
-      "cwe": ["CWE-613", "CWE-384"],
+      "cwe": [
+        "CWE-613",
+        "CWE-384"
+      ],
       "cwe_primary": "CWE-613",
       "vuln_class": "session_management",
       "owasp": "A07:2021",
@@ -406,7 +937,15 @@
         ],
         "curl": "curl -s -H \"Authorization: Bearer $OLD_ACCESS_TOK\" http://localhost:18001/api/auth/profile/"
       },
-      "remediation": "Reduce ACCESS_TOKEN_LIFETIME to 5-15 minutes. Implement token blacklist check on every request."
+      "remediation": "Reduce ACCESS_TOKEN_LIFETIME to 5-15 minutes. Implement token blacklist check on every request.",
+      "advisory_id": "ADV-2026-018",
+      "source_finding": "MC-12",
+      "verification_status": "contradicted-in-part",
+      "test_cases": [
+        "TC-012",
+        "TC-017"
+      ],
+      "verification_note": "PARTLY WRONG AS ORIGINALLY WRITTEN. TC-017 passed — logout DOES blacklist the refresh token correctly. The surviving claim is the 24-hour access-token lifetime, which ADV-2026-018 explains (the refresh route was never registered, so the lifetime was widened to compensate). Session revocation on password reset (TC-012) was not executed — mail sink unreachable. CWE-613 is kept as this row's primary and NOT copied onto L-04, to avoid claiming it twice (README.md section 6.2)."
     },
     {
       "id": "M-02",
@@ -414,7 +953,10 @@
       "severity": "Medium",
       "cvss_score": 5.4,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:R/S:U/C:H/I:N/A:N",
-      "cwe": ["CWE-522", "CWE-1004"],
+      "cwe": [
+        "CWE-522",
+        "CWE-1004"
+      ],
       "cwe_primary": "CWE-522",
       "vuln_class": "insecure_storage",
       "owasp": "A02:2021",
@@ -434,7 +976,11 @@
         ],
         "curl": "N/A — client-side vulnerability"
       },
-      "remediation": "Store tokens in HttpOnly, Secure, SameSite=Strict cookies. Use BFF pattern to keep tokens server-side."
+      "remediation": "Store tokens in HttpOnly, Secure, SameSite=Strict cookies. Use BFF pattern to keep tokens server-side.",
+      "advisory_id": null,
+      "source_finding": null,
+      "verification_status": "source-only",
+      "verification_note": "Not advised standalone; cited inside ADV-2026-012 as the amplifier that turns stored XSS into full session theft. Kept as its own row — distinct CWE and distinct fix (move tokens to HttpOnly/Secure/SameSite cookies)."
     },
     {
       "id": "M-03",
@@ -442,7 +988,9 @@
       "severity": "Medium",
       "cvss_score": 5.3,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N",
-      "cwe": ["CWE-200"],
+      "cwe": [
+        "CWE-200"
+      ],
       "cwe_primary": "CWE-200",
       "vuln_class": "information_disclosure",
       "owasp": "A01:2021",
@@ -462,7 +1010,11 @@
         ],
         "curl": "curl -s -H \"Authorization: Bearer $TOK\" http://localhost:18001/api/patients/1/lab-results/"
       },
-      "remediation": "Remove stored_path from LabResultSerializer.fields. Expose a signed download endpoint instead."
+      "remediation": "Remove stored_path from LabResultSerializer.fields. Expose a signed download endpoint instead.",
+      "advisory_id": null,
+      "source_finding": null,
+      "verification_status": "source-only",
+      "verification_note": "Not advised. The same absolute paths appear as ADV-2026-002 evidence (/app/backend/media/lab_results/3/benign.csv), which corroborates the disclosure. Independent fix: drop stored_path from LabResultSerializer."
     },
     {
       "id": "M-04",
@@ -470,7 +1022,10 @@
       "severity": "Medium",
       "cvss_score": 5.3,
       "cvss_vector": "AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:H/A:N",
-      "cwe": ["CWE-16", "CWE-644"],
+      "cwe": [
+        "CWE-16",
+        "CWE-644"
+      ],
       "cwe_primary": "CWE-644",
       "vuln_class": "misconfiguration",
       "owasp": "A05:2021",
@@ -489,7 +1044,11 @@
         ],
         "curl": "curl -s -H 'Host: evil.com' http://localhost:18001/api/health/"
       },
-      "remediation": "Set ALLOWED_HOSTS to specific hostnames."
+      "remediation": "Set ALLOWED_HOSTS to specific hostnames.",
+      "advisory_id": null,
+      "source_finding": null,
+      "verification_status": "not-tested-live",
+      "verification_note": "Host header injection was never tested by the DAST run."
     },
     {
       "id": "M-05",
@@ -497,7 +1056,9 @@
       "severity": "Medium",
       "cvss_score": 5.3,
       "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
-      "cwe": ["CWE-204"],
+      "cwe": [
+        "CWE-204"
+      ],
       "cwe_primary": "CWE-204",
       "vuln_class": "user_enumeration",
       "owasp": "A07:2021",
@@ -517,7 +1078,18 @@
         ],
         "curl": "curl -s -X POST http://localhost:18001/api/auth/signup/ -H 'Content-Type: application/json' -d '{\"email\":\"admin@app.local\",\"name\":\"test\",\"password\":\"Test@123\",\"confirm_password\":\"Test@123\"}'"
       },
-      "remediation": "Return generic message for all signup failures. Use two-step signup with email verification."
+      "remediation": "Return generic message for all signup failures. Use two-step signup with email verification.",
+      "advisory_id": "ADV-2026-014",
+      "source_finding": "MC-11",
+      "verification_status": "confirmed-live",
+      "severity_dast": "Medium",
+      "cvss_score_dast": 5.3,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+      "parameter": "email",
+      "test_cases": [
+        "TC-006"
+      ],
+      "verification_note": "Existing address returns 400, new one 201 — a binary oracle on status code alone. The login and forgot-password flows handle this correctly (TC-002, TC-009, TC-010 all pass), so an enumeration claim against those two is a false positive."
     },
     {
       "id": "M-06",
@@ -525,7 +1097,9 @@
       "severity": "Medium",
       "cvss_score": 5.3,
       "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N",
-      "cwe": ["CWE-16"],
+      "cwe": [
+        "CWE-16"
+      ],
       "cwe_primary": "CWE-16",
       "vuln_class": "misconfiguration",
       "owasp": "A05:2021",
@@ -544,7 +1118,16 @@
         ],
         "curl": "N/A — configuration issue"
       },
-      "remediation": "Use gunicorn or uvicorn. Remove makemigrations from entrypoint."
+      "remediation": "Use gunicorn or uvicorn. Remove makemigrations from entrypoint.",
+      "advisory_id": "ADV-2026-010",
+      "source_finding": "SRV-04",
+      "verification_status": "confirmed-live",
+      "severity_dast": "High",
+      "cvss_score_dast": 7.5,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+      "test_cases": [],
+      "chain_step": 5,
+      "verification_note": "Rated High by DAST, not Medium: runserver's StatReloader is the mechanism that converts C-03's arbitrary file write into code execution. Also single-threaded, no request limits, no TLS."
     },
     {
       "id": "M-07",
@@ -552,7 +1135,10 @@
       "severity": "Medium",
       "cvss_score": 5.4,
       "cvss_vector": "AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:L/A:N",
-      "cwe": ["CWE-319", "CWE-693"],
+      "cwe": [
+        "CWE-319",
+        "CWE-693"
+      ],
       "cwe_primary": "CWE-319",
       "vuln_class": "transport_security",
       "owasp": "A05:2021",
@@ -571,7 +1157,17 @@
         ],
         "curl": "curl -sI http://localhost:18001/api/health/ | grep -iE 'strict|content-security'"
       },
-      "remediation": "Add SECURE_HSTS_SECONDS = 31536000, SESSION_COOKIE_SECURE = True, CSRF_COOKIE_SECURE = True. Install django-csp."
+      "remediation": "Add SECURE_HSTS_SECONDS = 31536000, SESSION_COOKIE_SECURE = True, CSRF_COOKIE_SECURE = True. Install django-csp.",
+      "advisory_id": "ADV-2026-015",
+      "source_finding": "SRV-07",
+      "verification_status": "confirmed-live",
+      "severity_dast": "Medium",
+      "cvss_score_dast": 5.3,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+      "test_cases": [
+        "TC-060"
+      ],
+      "verification_note": "HSTS, CSP and Permissions-Policy confirmed missing over plaintext HTTP. X-Frame-Options, X-Content-Type-Options and Referrer-Policy ARE present as framework defaults — a finding claiming those three are missing is a false positive."
     },
     {
       "id": "M-08",
@@ -579,7 +1175,9 @@
       "severity": "Medium",
       "cvss_score": 5.3,
       "cvss_vector": "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
-      "cwe": ["CWE-319"],
+      "cwe": [
+        "CWE-319"
+      ],
       "cwe_primary": "CWE-319",
       "vuln_class": "transport_security",
       "owasp": "A02:2021",
@@ -599,7 +1197,14 @@
         ],
         "curl": "N/A — network-level issue"
       },
-      "remediation": "Set EMAIL_USE_TLS = True with proper SMTP server on port 587."
+      "remediation": "Set EMAIL_USE_TLS = True with proper SMTP server on port 587.",
+      "advisory_id": null,
+      "source_finding": null,
+      "verification_status": "not-tested-live",
+      "test_cases": [
+        "TC-012"
+      ],
+      "verification_note": "ADV-2026-015 covers HTTP transport only, not SMTP. TC-012 was not executed because the mailpit sink was unreachable from the testing position, so the reset-token-in-cleartext path is untested rather than refuted."
     },
     {
       "id": "M-09",
@@ -607,7 +1212,9 @@
       "severity": "Medium",
       "cvss_score": 5.3,
       "cvss_vector": "AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:H/A:N",
-      "cwe": ["CWE-250"],
+      "cwe": [
+        "CWE-250"
+      ],
       "cwe_primary": "CWE-250",
       "vuln_class": "misconfiguration",
       "owasp": "A05:2021",
@@ -627,7 +1234,11 @@
         ],
         "curl": "N/A — container configuration"
       },
-      "remediation": "Add non-root user: RUN adduser --disabled-password appuser && USER appuser. Remove gcc via multi-stage build."
+      "remediation": "Add non-root user: RUN adduser --disabled-password appuser && USER appuser. Remove gcc via multi-stage build.",
+      "advisory_id": null,
+      "source_finding": null,
+      "verification_status": "source-only",
+      "verification_note": "Container user is not observable black-box. Corroborated indirectly: ADV-2026-002 wrote to /tmp and /app/backend, which implies a privileged process."
     },
     {
       "id": "M-10",
@@ -635,7 +1246,9 @@
       "severity": "Medium",
       "cvss_score": 5.3,
       "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
-      "cwe": ["CWE-778"],
+      "cwe": [
+        "CWE-778"
+      ],
       "cwe_primary": "CWE-778",
       "vuln_class": "missing_controls",
       "owasp": "A09:2021",
@@ -655,7 +1268,11 @@
         ],
         "curl": "N/A — absence of controls"
       },
-      "remediation": "Configure Django LOGGING with structured output. Log all auth events, PHI access, privilege changes, prescription approvals."
+      "remediation": "Configure Django LOGGING with structured output. Log all auth events, PHI access, privilege changes, prescription approvals.",
+      "advisory_id": null,
+      "source_finding": null,
+      "verification_status": "source-only",
+      "verification_note": "Absence of audit logging is not observable black-box."
     },
     {
       "id": "M-11",
@@ -663,7 +1280,10 @@
       "severity": "Medium",
       "cvss_score": 5.3,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:H",
-      "cwe": ["CWE-400", "CWE-770"],
+      "cwe": [
+        "CWE-400",
+        "CWE-770"
+      ],
       "cwe_primary": "CWE-400",
       "vuln_class": "resource_exhaustion",
       "owasp": "A04:2021",
@@ -683,7 +1303,11 @@
         ],
         "curl": "curl -s -X POST -H \"Authorization: Bearer $TOK\" -F 'file=@big.csv' http://localhost:18001/api/patients/1/lab-results/"
       },
-      "remediation": "Add explicit file size validation in view (check request.FILES['file'].size). Set reasonable limit (e.g. 10MB)."
+      "remediation": "Add explicit file size validation in view (check request.FILES['file'].size). Set reasonable limit (e.g. 10MB).",
+      "advisory_id": null,
+      "source_finding": null,
+      "verification_status": "not-tested-live",
+      "verification_note": "Upload size limits were never probed; requests were paced to avoid edge throttling."
     },
     {
       "id": "L-01",
@@ -691,7 +1315,9 @@
       "severity": "Low",
       "cvss_score": 3.7,
       "cvss_vector": "AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N",
-      "cwe": ["CWE-532"],
+      "cwe": [
+        "CWE-532"
+      ],
       "cwe_primary": "CWE-532",
       "vuln_class": "information_disclosure",
       "owasp": "A09:2021",
@@ -710,7 +1336,11 @@
         ],
         "curl": "N/A — log-level issue"
       },
-      "remediation": "Remove password from log output: print(f'[Seed] Created user: {email}')."
+      "remediation": "Remove password from log output: print(f'[Seed] Created user: {email}').",
+      "advisory_id": null,
+      "source_finding": null,
+      "verification_status": "source-only",
+      "verification_note": "Container logs are not reachable black-box. Related and confirmed: ADV-2026-003 notes the seed script recreates deleted accounts on every restart."
     },
     {
       "id": "L-02",
@@ -718,7 +1348,9 @@
       "severity": "Low",
       "cvss_score": 3.1,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N",
-      "cwe": ["CWE-602"],
+      "cwe": [
+        "CWE-602"
+      ],
       "cwe_primary": "CWE-602",
       "vuln_class": "client_side_enforcement",
       "owasp": "A01:2021",
@@ -739,7 +1371,11 @@
         ],
         "curl": "N/A — client-side issue"
       },
-      "remediation": "Verify role via API call instead of trusting localStorage."
+      "remediation": "Verify role via API call instead of trusting localStorage.",
+      "advisory_id": null,
+      "source_finding": null,
+      "verification_status": "not-tested-live",
+      "verification_note": "The SPA route guard was not exercised. ADV-2026-001 supersedes the impact (the server-side role check is itself bypassable) but not the defect."
     },
     {
       "id": "L-03",
@@ -747,7 +1383,9 @@
       "severity": "Low",
       "cvss_score": 3.1,
       "cvss_vector": "AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N",
-      "cwe": ["CWE-942"],
+      "cwe": [
+        "CWE-942"
+      ],
       "cwe_primary": "CWE-942",
       "vuln_class": "misconfiguration",
       "owasp": "A05:2021",
@@ -766,7 +1404,11 @@
         ],
         "curl": "curl -s -H 'Origin: http://localhost:3000' -I http://localhost:18001/api/health/ | grep -i access-control"
       },
-      "remediation": "Remove localhost origins from CORS_ALLOWED_ORIGINS in production."
+      "remediation": "Remove localhost origins from CORS_ALLOWED_ORIGINS in production.",
+      "advisory_id": null,
+      "source_finding": null,
+      "verification_status": "source-only",
+      "verification_note": "CORS policy was not probed by the DAST run."
     },
     {
       "id": "L-04",
@@ -774,7 +1416,9 @@
       "severity": "Low",
       "cvss_score": 2.7,
       "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:L",
-      "cwe": ["CWE-16"],
+      "cwe": [
+        "CWE-16"
+      ],
       "cwe_primary": "CWE-16",
       "vuln_class": "misconfiguration",
       "owasp": "A05:2021",
@@ -795,7 +1439,58 @@
         ],
         "curl": "curl -s -X POST http://localhost:18001/api/auth/token/refresh/ -H 'Content-Type: application/json' -d '{\"refresh\":\"<token>\"}'"
       },
-      "remediation": "Add refresh endpoint to auth_app/urls.py: path('token/refresh/', TokenRefreshView.as_view())."
+      "remediation": "Add refresh endpoint to auth_app/urls.py: path('token/refresh/', TokenRefreshView.as_view()).",
+      "advisory_id": "ADV-2026-018",
+      "source_finding": "MC-14",
+      "verification_status": "confirmed-live",
+      "severity_dast": "Informational",
+      "cvss_score_dast": null,
+      "test_cases": [
+        "TC-062"
+      ],
+      "verification_note": "POST with a valid refresh token returns 404 — the route was never registered, so the SPA's silent-refresh path is dead. This is why access tokens live 24 hours (see M-01). cwe_primary kept as CWE-16; ADV-2026-018's CWE-613 is left with M-01 so it is claimed once (README.md section 6.2)."
+    },
+    {
+      "id": "L-05",
+      "title": "Password reset tokens rendered in the Django admin changelist",
+      "severity": "Low",
+      "cvss_score": 3.5,
+      "cvss_vector": "AV:N/AC:L/PR:H/UI:N/S:U/C:L/I:L/A:N",
+      "cwe": [
+        "CWE-522"
+      ],
+      "cwe_primary": "CWE-522",
+      "vuln_class": "insecure_storage",
+      "owasp": "A02:2021",
+      "method": "GET",
+      "endpoint": "/admin/auth_app/passwordresettoken/",
+      "parameter": "q",
+      "exploitable": false,
+      "best_verification": "verified-config",
+      "affected_component": "auth_app/admin.py — PasswordResetToken registered with the raw token value in list_display and searchable by user__email",
+      "affected_endpoint": "GET /admin/auth_app/passwordresettoken/",
+      "auth_required": true,
+      "advisory_id": "ADV-2026-016",
+      "source_finding": "MC-13",
+      "verification_status": "not-exploitable-live",
+      "severity_dast": "Low",
+      "cvss_score_dast": 3.5,
+      "cvss_vector_dast": "CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:L/I:L/A:N",
+      "test_cases": [
+        "TC-058"
+      ],
+      "description": "The admin registration puts live password-reset token values in list_display and exposes a search on user__email, so any staff user with the model's view permission can read a token and complete another user's password reset. NOT EXPLOITABLE AS DEPLOYED: the changelist returned 403 on the live target because the seeded staff account holds no model permissions. The defect is confirmed in source and becomes live the moment permissions are granted, which is why it is recorded at Low rather than dropped.",
+      "impact": "A staff user who is granted the view permission — a routine administrative change, not an attack — can read unused reset tokens and take over any account, including admin. Severity rises to Medium in that configuration. Also a credential-at-rest exposure to anyone with database or backup access.",
+      "reproduction": {
+        "steps": [
+          "Authenticate to /admin/login/ as the seeded staff account (admin@app.local)",
+          "GET /admin/auth_app/passwordresettoken/",
+          "Live result: 403 — the account holds no view permission on the model",
+          "Grant auth_app.view_passwordresettoken to that account and repeat: the changelist renders raw token values"
+        ],
+        "curl": "curl -s -b \"sessionid=$SID\" http://medicare4.secruin.cloud/admin/auth_app/passwordresettoken/"
+      },
+      "remediation": "Remove the token value from list_display, search_fields and any admin readonly view. Store only a hash of the token and compare hashes on redemption. Expire and delete redeemed tokens instead of retaining them with a used flag. If the model needs to be inspectable at all, expose the user, the timestamps and the used flag — never the secret."
     }
   ]
 }
