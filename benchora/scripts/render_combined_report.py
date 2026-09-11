@@ -21,6 +21,7 @@ from statistics import mean, stdev
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from render_benchmark_report import (
+    _unmatched, _unmatched_endpoints, _unmatched_findings,
     _render_css, _clean_component_name, _esc, _fmt_num, _fmt_pct, _fmt_usd,
     _severity_badge, _render_progress_bar,
     _render_advisory_data, _render_advisory_overlay,
@@ -422,7 +423,7 @@ def _endpoint_details(scores) -> str:
     for i, s in enumerate(scores):
         ep = _get_nested(s, "accuracy", "endpoint_coverage", default={})
         tp_eps = ep.get("tp_endpoints", [])
-        unmatched_eps = ep.get("unmatched_endpoints", [])
+        unmatched_eps = _unmatched_endpoints(ep)
         fn_eps = ep.get("missed", [])
         mismatch = ep.get("method_mismatch_credited", [])
 
@@ -441,7 +442,7 @@ def _endpoint_details(scores) -> str:
 
         run_id = s.get("run_id", f"Run {i+1}")
         tp_count = ep.get("tp", 0)
-        unmatched_count = ep.get("unmatched", 0)
+        unmatched_count = _unmatched(ep)
         fn_count = ep.get("fn", 0)
 
         sections += f"""<details>
@@ -470,7 +471,7 @@ def _finding_details(scores, advisory_ids: set | None = None) -> str:
     for i, s in enumerate(scores):
         fa = _get_nested(s, "accuracy", "finding_accuracy", default={})
         tp_list = fa.get("tp_findings", [])
-        unmatched_list = fa.get("unmatched_findings", [])
+        unmatched_list = _unmatched_findings(fa)
         fn_list = fa.get("missed_vulns", [])
 
         def _finding_table(findings, label):
@@ -508,7 +509,7 @@ def _finding_details(scores, advisory_ids: set | None = None) -> str:
 
         run_id = s.get("run_id", f"Run {i+1}")
         tp_count = fa.get("tp", 0)
-        unmatched_count = fa.get("unmatched", 0)
+        unmatched_count = _unmatched(fa)
         fn_count = fa.get("fn", 0)
 
         sections += f"""<details>
@@ -540,7 +541,7 @@ def _endpoint_cross_comparison(scores) -> str:
         if not ep.get("has_ground_truth"):
             return ""
         tp_eps = set(ep.get("tp_endpoints", []))
-        unmatched_eps = set(ep.get("unmatched_endpoints", []))
+        unmatched_eps = set(_unmatched_endpoints(ep))
         fn_eps = set(ep.get("missed", []))
         gt_endpoints |= tp_eps | fn_eps
         run_tp.append(tp_eps)
@@ -613,7 +614,7 @@ def _vuln_cross_comparison(scores, advisory_ids: set | None = None) -> str:
             if key not in all_vulns:
                 all_vulns[key] = f
         um_map = {}
-        for f in fa.get("unmatched_findings", []):
+        for f in _unmatched_findings(fa):
             cwe = str(f.get("cwe", ""))
             title = (f.get("title", "") or "")[:60].strip()
             key = f"{cwe}|{title}".lower()

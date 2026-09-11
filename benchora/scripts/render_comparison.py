@@ -58,6 +58,35 @@ MODEL_COLORS = [
 MODEL_COLORS_ALPHA = [c + "33" for c in MODEL_COLORS]
 
 
+
+def _um(d, default=None):
+    """Unmatched count, accepting the legacy "fp" key."""
+    if not isinstance(d, dict):
+        return default
+    for k in ("unmatched", "fp"):
+        if d.get(k) is not None:
+            return d[k]
+    return default
+
+
+def _um_eps(d):
+    if not isinstance(d, dict):
+        return []
+    for k in ("unmatched_endpoints", "false_positives"):
+        if d.get(k) is not None:
+            return d[k]
+    return []
+
+
+def _um_finds(d):
+    if not isinstance(d, dict):
+        return []
+    for k in ("unmatched_findings", "fp_findings"):
+        if d.get(k) is not None:
+            return d[k]
+    return []
+
+
 def _short(model_id: str) -> str:
     parts = model_id.split("/")
     return parts[-1] if len(parts) > 1 else model_id
@@ -226,11 +255,11 @@ def _build_model_detail_html(models: list, md: dict) -> str:
             ec = rd.get("endpoint_coverage")
             if ec:
                 missed_list = "".join(f"<li><code>{htmlmod.escape(str(e))}</code></li>" for e in (ec.get("missed") or []))
-                unmatched_list = "".join(f"<li><code>{htmlmod.escape(str(e))}</code></li>" for e in (ec.get("unmatched_endpoints") or []))
+                unmatched_list = "".join(f"<li><code>{htmlmod.escape(str(e))}</code></li>" for e in _um_eps(ec))
                 ep_html = (f'<div class="gt-block"><h5>Endpoint Coverage</h5>'
                     f'<div class="gt-metrics">'
                     f'<span class="gt-tp">TP={ec["tp"]}</span> '
-                    f'<span class="gt-unmatched">Unmatched={ec["unmatched"]}</span> '
+                    f'<span class="gt-unmatched">Unmatched={_um(ec)}</span> '
                     f'<span class="gt-fn">FN={ec["fn"]}</span> '
                     f'<span>P={_fmt(ec.get("precision"))}</span> '
                     f'<span>R={_fmt(ec.get("recall"))}</span> '
@@ -238,7 +267,7 @@ def _build_model_detail_html(models: list, md: dict) -> str:
                 if missed_list:
                     ep_html += f'<details><summary>Missed endpoints ({ec["fn"]})</summary><ul class="gt-list">{missed_list}</ul></details>'
                 if unmatched_list:
-                    ep_html += f'<details><summary>Unmatched ({ec["unmatched"]})</summary><ul class="gt-list">{unmatched_list}</ul></details>'
+                    ep_html += f'<details><summary>Unmatched ({_um(ec)})</summary><ul class="gt-list">{unmatched_list}</ul></details>'
                 ep_html += '</div>'
 
             # GT Accuracy — Findings
@@ -250,7 +279,7 @@ def _build_model_detail_html(models: list, md: dict) -> str:
                     label = htmlmod.escape(str(f.get("gt_id", "") or f.get("title", "")))
                     tp_list += f"<li>{label}</li>"
                 unmatched_list = ""
-                for f in (fa.get("unmatched_findings") or []):
+                for f in _um_finds(fa):
                     t = htmlmod.escape(f.get("title", ""))
                     cwe = f.get("cwe", "")
                     unmatched_list += f"<li>CWE-{cwe}: {t}</li>"
@@ -263,7 +292,7 @@ def _build_model_detail_html(models: list, md: dict) -> str:
                 fa_html = (f'<div class="gt-block"><h5>Finding Accuracy (vs Ground Truth)</h5>'
                     f'<div class="gt-metrics">'
                     f'<span class="gt-tp">TP={fa["tp"]}</span> '
-                    f'<span class="gt-unmatched">Unmatched={fa["unmatched"]}</span> '
+                    f'<span class="gt-unmatched">Unmatched={_um(fa)}</span> '
                     f'<span class="gt-fn">FN={fa["fn"]}</span> '
                     f'<span>P={_fmt(fa.get("precision"))}</span> '
                     f'<span>R={_fmt(fa.get("recall"))}</span> '
@@ -271,7 +300,7 @@ def _build_model_detail_html(models: list, md: dict) -> str:
                 if tp_list:
                     fa_html += f'<details><summary>True positives ({fa["tp"]})</summary><ul class="gt-list">{tp_list}</ul></details>'
                 if unmatched_list:
-                    fa_html += f'<details><summary>Unmatched ({fa["unmatched"]})</summary><ul class="gt-list">{unmatched_list}</ul></details>'
+                    fa_html += f'<details><summary>Unmatched ({_um(fa)})</summary><ul class="gt-list">{unmatched_list}</ul></details>'
                 if missed_list:
                     fa_html += f'<details><summary>Missed vulnerabilities ({fa["fn"]})</summary><ul class="gt-list">{missed_list}</ul></details>'
                 fa_html += '</div>'

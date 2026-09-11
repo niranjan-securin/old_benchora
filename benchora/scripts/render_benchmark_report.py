@@ -27,6 +27,40 @@ def _read_json(path: str) -> dict | list | None:
         return json.load(f)
 
 
+def _unmatched(d, default=None):
+    """Unmatched count, accepting the legacy "fp" key.
+
+    Score files written before the FP->unmatched rename carry "fp".  Reading
+    only "unmatched" on those silently yields the default, which would print 0
+    where the real count is non-zero — a zero score and "no data" are not the
+    same thing, so the default here is None, not 0.
+    """
+    if not isinstance(d, dict):
+        return default
+    for k in ("unmatched", "fp"):
+        if d.get(k) is not None:
+            return d[k]
+    return default
+
+
+def _unmatched_endpoints(d):
+    if not isinstance(d, dict):
+        return []
+    for k in ("unmatched_endpoints", "false_positives"):
+        if d.get(k) is not None:
+            return d[k]
+    return []
+
+
+def _unmatched_findings(d):
+    if not isinstance(d, dict):
+        return []
+    for k in ("unmatched_findings", "fp_findings"):
+        if d.get(k) is not None:
+            return d[k]
+    return []
+
+
 def _fmt_num(n, decimals=2):
     if n is None:
         return "—"
@@ -652,7 +686,7 @@ def _render_endpoint_coverage(ep: dict) -> str:
         return '<div class="container"><h2>1 &mdash; Endpoint Coverage</h2><div class="card"><p>No ground truth available.</p></div></div>'
 
     tp = ep.get("tp", 0)
-    unmatched = ep.get("unmatched", 0)
+    unmatched = _unmatched(ep)
     fn = ep.get("fn", 0)
     prec = ep.get("precision", 0)
     rec = ep.get("recall", 0)
@@ -662,7 +696,7 @@ def _render_endpoint_coverage(ep: dict) -> str:
     filtered_404 = ep.get("filtered_404_only", 0)
 
     tp_eps = ep.get("tp_endpoints", [])
-    unmatched_eps = ep.get("unmatched_endpoints", [])
+    unmatched_eps = _unmatched_endpoints(ep)
     fn_eps = ep.get("missed", [])
     mismatch_credited = ep.get("method_mismatch_credited", [])
     mismatch_probes = ep.get("method_mismatch_probes", [])
@@ -843,7 +877,7 @@ def _render_finding_accuracy(fa: dict, finding_details: dict | None = None, advi
         return '<div class="container"><h2>4 &mdash; Vulnerability Analysis</h2><div class="card"><p>No ground truth available.</p></div></div>'
 
     tp = fa.get("tp", 0)
-    unmatched = fa.get("unmatched", 0)
+    unmatched = _unmatched(fa)
     fn = fa.get("fn", 0)
     prec = fa.get("precision", 0)
     rec = fa.get("recall", 0)
@@ -855,7 +889,7 @@ def _render_finding_accuracy(fa: dict, finding_details: dict | None = None, advi
     sev_acc = fa.get("severity_accuracy", 0)
 
     tp_findings = fa.get("tp_findings", [])
-    unmatched_list = fa.get("unmatched_findings", [])
+    unmatched_list = _unmatched_findings(fa)
     fn_vulns = fa.get("missed_vulns", [])
     fd = finding_details or {}
 
